@@ -16,6 +16,8 @@ dist/
 *.log
 jarvis_system.log
 
-# Memory / Database
+# Memory / Database / Image Cache
 assets/memory.json
 assets/screenshot.png
+assets/screenshot.jpg
+assets/current_vision.jpg
