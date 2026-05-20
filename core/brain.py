@@ -17,8 +17,6 @@ class JarvisBrain:
         self.memory_file = "assets/memory.json"
         self.long_term_memory = self.load_memory()
         
-        # --- SHORT TERM MEMORY LIMIT ---
-        # 10 means he remembers the last 5 things you said, and his last 5 answers.
         self.max_short_term_history = 10 
         
         if not self.api_key:
@@ -28,9 +26,9 @@ class JarvisBrain:
             self.active = True
             self.client = Groq(api_key=self.api_key)
             
-            # --- MODEL SELECTION ---
+            # --- STABLE MODELS ---
             self.text_model = "llama-3.3-70b-versatile"        
-            self.vision_model = "meta-llama/llama-4-scout-17b-16e-instruct"  # The upgraded vision model!
+            self.vision_model = "meta-llama/llama-4-scout-17b-16e-instruct" 
 
             system_instruction = f"""
             You are J.A.R.V.I.S., a highly advanced, autonomous AI operating system.
@@ -45,10 +43,11 @@ class JarvisBrain:
             You MUST output your entire response as a raw JSON object matching this structure:
             {{
                 "spoken_response": "The text you will speak",
-                "ui_action": "none/minimize/maximize/combat_on/combat_off/show_news/open_code/open_browser/open_cmd/vol_up/vol_down/mute/screenshot/sleep",
+                "ui_action": "none/minimize/maximize/combat_on/combat_off/show_news/open_app/close_app/close_current/switch_app/deep_search/read_screen/vol_up/vol_down/mute/screenshot/sleep",
+                "target": "name of the app, the search query, or empty string",
                 "memory_to_save": "fact to save, or empty string"
             }}
-            *NOTE: If the user asks you to open VS Code, Chrome, or CMD, or asks you to change volume, take a screenshot, or sleep the PC, select the exact matching ui_action.*
+            *NOTE: Use 'close_current' to close whatever is currently on screen. Use 'switch_app' to alt-tab. Use 'deep_search' if the user asks you to look up or read about a specific topic online. Use 'read_screen' if the user asks you to read or analyze what is currently visible on their screen.*
             
             LONG TERM MEMORY:
             {self.long_term_memory}
@@ -68,7 +67,6 @@ class JarvisBrain:
         return []
 
     def save_to_memory(self, new_fact):
-        """Asynchronous Fire-and-Forget long-term memory."""
         if not new_fact or new_fact.strip() == "":
             return
             
@@ -84,10 +82,7 @@ class JarvisBrain:
         threading.Thread(target=write_to_disk, daemon=True).start()
 
     def _trim_memory(self):
-        """The Sliding Window: Keeps the system prompt + the most recent interactions."""
-        # If history length exceeds our limit + 1 (for the system prompt)
         if len(self.conversation_history) > (self.max_short_term_history + 1):
-            # Slice the list: Keep index 0, and the last N items
             self.conversation_history = [self.conversation_history[0]] + self.conversation_history[-self.max_short_term_history:]
 
     def think(self, user_input, max_retries=3):
@@ -97,7 +92,7 @@ class JarvisBrain:
         print("[Brain] Analyzing intent at LPU speed...")
         
         self.conversation_history.append({"role": "user", "content": user_input})
-        self._trim_memory() # Apply the sliding window before thinking
+        self._trim_memory() 
         
         for attempt in range(max_retries):
             try:
@@ -130,15 +125,13 @@ class JarvisBrain:
         if not self.active:
             return {"spoken_response": "Optical array offline.", "ui_action": "none"}
             
-        print("[Brain] Analyzing visual data at LPU speed...")
+        print(f"[Brain] Routing visual data through {self.vision_model}...")
         
-        # We don't send the whole chat history to the vision model (to save tokens), just the system prompt
         vision_messages = [
-            {"role": "system", "content": self.conversation_history[0]["content"]},
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": user_prompt},
+                    {"type": "text", "text": f"Read and summarize this screen context based on this request: {user_prompt}. Keep it to 2 or 3 concise sentences. No markdown formatting."},
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                 ]
             }
@@ -149,20 +142,21 @@ class JarvisBrain:
                 response = self.client.chat.completions.create(
                     model=self.vision_model,
                     messages=vision_messages,
-                    temperature=0.2,
-                    response_format={"type": "json_object"}
+                    temperature=0.4
                 )
                 
                 raw_text = response.choices[0].message.content
-                decision = json.loads(raw_text)
                 
-                # --- CROSS-WIRING FIX ---
-                # We inject what he saw and what he said back into his normal text memory!
-                self.conversation_history.append({"role": "user", "content": f"[User showed an image to the optical array. User asked: {user_prompt}]"})
-                self.conversation_history.append({"role": "assistant", "content": raw_text})
+                # Cross-wire the visual memory into his main text brain
+                self.conversation_history.append({"role": "user", "content": f"[User showed screen. You read: {raw_text}]"})
                 self._trim_memory()
                 
-                decision["spoken_response"] = decision.get("spoken_response", "").replace("*", "").replace("#", "")
+                # Manually construct the decision JSON so main.py doesn't crash
+                decision = {
+                    "spoken_response": raw_text.replace("*", "").replace("#", ""),
+                    "ui_action": "none",
+                    "target": ""
+                }
                 return decision
                 
             except Exception as e:

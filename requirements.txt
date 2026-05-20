@@ -44,6 +44,7 @@ openai==2.36.0
 opencv-python==4.13.0.92
 packaging==26.2
 pefile==2024.8.26
+pillow==12.2.0
 primp==1.2.3
 propcache==0.5.2
 proto-plus==1.28.0
