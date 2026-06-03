@@ -142,6 +142,64 @@ class JarvisWorker(QThread):
                     self.status_signal.emit({"log": "[SYSTEM]: ACCESSING GLOBAL NETWORK"})
                     self.status_signal.emit({"log": spoken_text, "action": "show_news"})
                 
+                # --- ZERO-LATENCY WEB BROWSER PILOT ---
+                elif ui_action == "pilot_browser":
+                    action_type = target.get("action", "")
+                    self.status_signal.emit({"log": f"[SYSTEM]: PILOTING BROWSER: {action_type.upper()}"})
+                    
+                    if action_type == "scan_page":
+                        self.mouth.speak(spoken_text) 
+                        
+                        scan_data = self.automation.pilot_browser("scan_page")
+                        prompt = f"I scanned the webpage. Here are the interactive HTML elements: {scan_data}. Summarize the primary buttons or text inputs available for the user to interact with in 2 sentences."
+                        self.status_signal.emit({"log": "[SYSTEM]: ANALYZING DOM TREE..."})
+                        
+                        follow_up = self.brain.think(prompt)
+                        spoken_text = follow_up.get("spoken_response", "Scan complete.")
+                        self.status_signal.emit({"log": f"[JARVIS]: {spoken_text}"})
+                        self.mouth.speak(spoken_text)
+                        continue 
+                    else:
+                        self.automation.pilot_browser(
+                            action_type, 
+                            url=target.get("url"), 
+                            selector=target.get("selector"), 
+                            text=target.get("text")
+                        )
+                # --- ZERO-LATENCY NATIVE DESKTOP PILOT ---
+                elif ui_action == "pilot_desktop":
+                    action_type = target.get("action", "")
+                    app_name = target.get("app_name", "")
+                    self.status_signal.emit({"log": f"[SYSTEM]: INTERFACING WITH OS KERNEL: {app_name.upper()}"})
+                    
+                    if action_type == "scan_window":
+                        self.mouth.speak(spoken_text) 
+                        
+                        scan_data = self.automation.pilot_desktop("scan_window", app_name)
+                        
+                        # Catch the sandbox denial and read it aloud
+                        if "ACCESS DENIED" in scan_data or "SYSTEM ERROR" in scan_data:
+                            self.status_signal.emit({"log": f"[JARVIS]: {scan_data}"})
+                            self.mouth.speak(scan_data)
+                            continue
+                            
+                        prompt = f"I scanned the Windows application '{app_name}'. Here is the UIA Accessibility Tree: {scan_data}. Summarize the primary buttons or inputs available for the user in 1 or 2 sentences."
+                        self.status_signal.emit({"log": "[SYSTEM]: ANALYZING UI AUTOMATION TREE..."})
+                        
+                        follow_up = self.brain.think(prompt)
+                        spoken_text = follow_up.get("spoken_response", "Application scan complete.")
+                        self.status_signal.emit({"log": f"[JARVIS]: {spoken_text}"})
+                        self.mouth.speak(spoken_text)
+                        continue 
+                    else:
+                        response = self.automation.pilot_desktop(
+                            action_type, 
+                            app_name=app_name, 
+                            element_name=target.get("element_name"), 
+                            text=target.get("text")
+                        )
+                        self.status_signal.emit({"log": f"[SYSTEM]: {response}"})
+
                 # --- APP & WINDOW CONTROL ---
                 elif ui_action == "open_app":
                     self.status_signal.emit({"log": f"[SYSTEM]: SCANNING FOR '{target.upper()}'"})
@@ -212,7 +270,7 @@ class JarvisWorker(QThread):
                 if ui_action != "show_news":
                     self.status_signal.emit({"log": f"[JARVIS]: {spoken_text}"})
 
-                if ui_action != "sleep" and ui_action != "deep_search" and ui_action != "read_screen":
+                if ui_action not in ["sleep", "deep_search", "read_screen", "pilot_browser"]:
                     self.mouth.speak(spoken_text)
                 
             else:

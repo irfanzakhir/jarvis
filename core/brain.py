@@ -11,12 +11,11 @@ load_dotenv()
 
 class JarvisBrain:
     def __init__(self):
-        print("[Brain] Booting Agentic Neural Network (Groq Speed Engine + Sliding Memory)...")
+        print("[Brain] Booting Agentic Neural Network (Native Tool Calling Edition)...")
         
         self.api_key = os.environ.get("GROQ_API_KEY")
         self.memory_file = "assets/memory.json"
         self.long_term_memory = self.load_memory()
-        
         self.max_short_term_history = 10 
         
         if not self.api_key:
@@ -35,19 +34,13 @@ class JarvisBrain:
             You manage a visual dashboard and the user's local system.
             
             CRITICAL DIRECTIVES:
-            1. If a user asks you to perform an action but does not specify HOW, ask a clarifying question.
-            2. If the user corrects you or states a preference, save it to your memory.
-            3. Keep your spoken responses concise and highly professional. Do not include markdown asterisks or emojis.
-            
-            JSON OUTPUT REQUIREMENT:
-            You MUST output your entire response as a raw JSON object matching this structure:
-            {{
-                "spoken_response": "The text you will speak",
-                "ui_action": "none/minimize/maximize/combat_on/combat_off/show_news/open_app/close_app/close_current/switch_app/deep_search/read_screen/vol_up/vol_down/mute/screenshot/sleep",
-                "target": "name of the app, the search query, or empty string",
-                "memory_to_save": "fact to save, or empty string"
-            }}
-            *NOTE: Use 'close_current' to close whatever is currently on screen. Use 'switch_app' to alt-tab. Use 'deep_search' if the user asks you to look up or read about a specific topic online. Use 'read_screen' if the user asks you to read or analyze what is currently visible on their screen.*
+            1. ACTION REQUESTS: If the user asks to open/close a local application (INCLUDING browsers like Chrome, Brave, or Edge), use 'control_application'. ONLY use 'pilot_browser' if the user asks to navigate to a specific website or internet URL.
+            2. CONVERSATION: If the user just says hello or makes general conversation, DO NOT call any tools. Reply normally.
+            3. MEMORY: If the user states a preference, use the 'remember_fact' tool.
+            4. ZERO-GUESSING RULE: WHEN piloting the Web Browser, NEVER guess HTML selectors. Use 'scan_page' FIRST.
+            5. MACRO INJECTION PROTOCOL: Modern desktop apps (like WhatsApp or Spotify) have complex UI trees. The most reliable way to navigate them is to inject keyboard macros! Use 'pilot_desktop' with action='type' and NO element_name. You can string commands together using pywinauto shortcuts (e.g., '^f' for Ctrl+F, or '{{ENTER}}'). 
+               -> EXAMPLE: To send a WhatsApp message, send the text string: "^fContactName{{ENTER}}Your message here{{ENTER}}". This will search, open the chat, and send the message instantly.
+            6. Keep spoken responses concise and highly professional. No markdown.
             
             LONG TERM MEMORY:
             {self.long_term_memory}
@@ -55,6 +48,138 @@ class JarvisBrain:
             
             self.conversation_history = [
                 {"role": "system", "content": system_instruction}
+            ]
+            
+            # ==========================================
+            # NATIVE TOOL SCHEMA
+            # ==========================================
+            self.tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "pilot_browser",
+                        "description": "Pilots an active web browser. Can navigate to URLs, type text, click elements, scan the page, or close the browser.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "action": {"type": "string", "enum": ["navigate", "scan_page", "click", "type", "close"]},
+                                "url": {"type": "string", "description": "The URL to navigate to (e.g., https://github.com). Only used for navigate."},
+                                "selector": {"type": "string", "description": "The CSS selector to click or type into (e.g., 'input#search')."},
+                                "text": {"type": "string", "description": "The exact text to type. Only used for type action."},
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase."}
+                            },
+                            "required": ["action", "spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "pilot_desktop",
+                        "description": "Pilots native Windows desktop apps. You can scan for UI buttons, click them, or rapidly inject keyboard macro shortcuts.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "action": {"type": "string", "enum": ["scan_window", "click", "type"]},
+                                "app_name": {"type": "string", "description": "The target application name (e.g., 'Notepad', 'WhatsApp')."},
+                                "element_name": {"type": "string", "description": "The exact name of the button to interact with. LEAVE EMPTY if you are using global Macro Injection."},
+                                "text": {"type": "string", "description": "The text to type. Supports standard text OR pywinauto macro keys like '{ENTER}' or '^f' (Ctrl+F)."},
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase."}
+                            },
+                            "required": ["action", "app_name", "spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "control_application",
+                        "description": "Opens, closes, or switches software applications on the PC.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "action": {"type": "string", "enum": ["open_app", "close_app", "switch_app", "close_current"]},
+                                "app_name": {"type": "string", "description": "The target application name (e.g., spotify, discord, chrome, brave). Leave empty if not applicable."},
+                                "spoken_response": {"type": "string", "description": "What you will say aloud to confirm the action."}
+                            },
+                            "required": ["action", "spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "search_network",
+                        "description": "Searches the global internet/web for information, news, or specific questions.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string", "description": "The precise search query to look up."},
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase before searching."}
+                            },
+                            "required": ["query", "spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "analyze_screen",
+                        "description": "Reads and analyzes the user's current computer screen visually.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase before scanning."}
+                            },
+                            "required": ["spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "control_hardware",
+                        "description": "Controls PC hardware like audio volume, power states, or taking screenshots.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "action": {"type": "string", "enum": ["vol_up", "vol_down", "mute", "screenshot", "sleep"]},
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase."}
+                            },
+                            "required": ["action", "spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "manage_dashboard",
+                        "description": "Controls the Jarvis visual HUD dashboard interface.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "action": {"type": "string", "enum": ["minimize", "maximize", "combat_on", "combat_off", "show_news"]},
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase."}
+                            },
+                            "required": ["action", "spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "remember_fact",
+                        "description": "Saves an important user preference or fact to long-term memory.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "fact": {"type": "string", "description": "The fact to remember."},
+                                "spoken_response": {"type": "string", "description": "Confirmation of remembering."}
+                            },
+                            "required": ["fact", "spoken_response"]
+                        }
+                    }
+                }
             ]
 
     def load_memory(self):
@@ -69,7 +194,6 @@ class JarvisBrain:
     def save_to_memory(self, new_fact):
         if not new_fact or new_fact.strip() == "":
             return
-            
         print(f"[Brain] Saving to long-term memory: {new_fact}")
         self.long_term_memory.append(new_fact)
         
@@ -89,7 +213,7 @@ class JarvisBrain:
         if not self.active:
             return {"spoken_response": "Groq processors offline.", "ui_action": "none"}
             
-        print("[Brain] Analyzing intent at LPU speed...")
+        print("[Brain] Analyzing intent with Native Tools...")
         
         self.conversation_history.append({"role": "user", "content": user_input})
         self._trim_memory() 
@@ -100,21 +224,73 @@ class JarvisBrain:
                     model=self.text_model,
                     messages=self.conversation_history,
                     temperature=0.2,
-                    response_format={"type": "json_object"} 
+                    tools=self.tools,
+                    tool_choice="auto"
                 )
                 
-                raw_text = response.choices[0].message.content
-                decision = json.loads(raw_text)
+                msg = response.choices[0].message
+                decision = {
+                    "spoken_response": "",
+                    "ui_action": "none",
+                    "target": ""
+                }
                 
-                self.conversation_history.append({"role": "assistant", "content": raw_text})
+                if msg.tool_calls:
+                    tool_call = msg.tool_calls[0]
+                    func_name = tool_call.function.name
+                    
+                    try:
+                        args = json.loads(tool_call.function.arguments)
+                    except:
+                        args = {}
+                        
+                    print(f"[Brain] Tool Triggered: {func_name} | Args: {args}")
+                    decision["spoken_response"] = args.get("spoken_response", "Processing request, sir.")
+                    
+                    if func_name == "remember_fact":
+                        self.save_to_memory(args.get("fact"))
+                    elif func_name == "pilot_browser":
+                        decision["ui_action"] = "pilot_browser"
+                        decision["target"] = {
+                            "action": args.get("action"),
+                            "url": args.get("url"),
+                            "selector": args.get("selector"),
+                            "text": args.get("text")
+                        }
+                    elif func_name == "pilot_desktop":
+                        decision["ui_action"] = "pilot_desktop"
+                        decision["target"] = {
+                            "action": args.get("action"),
+                            "app_name": args.get("app_name"),
+                            "element_name": args.get("element_name"),
+                            "text": args.get("text")
+                        }
+                    elif func_name == "control_application":
+                        decision["ui_action"] = args.get("action", "none")
+                        decision["target"] = args.get("app_name", "")
+                    elif func_name == "search_network":
+                        decision["ui_action"] = "deep_search"
+                        decision["target"] = args.get("query", "")
+                    elif func_name == "analyze_screen":
+                        decision["ui_action"] = "read_screen"
+                    elif func_name == "control_hardware" or func_name == "manage_dashboard":
+                        decision["ui_action"] = args.get("action", "none")
+
+                    self.conversation_history.append({"role": "assistant", "content": f"[Tool Executed: {func_name}] {decision['spoken_response']}"})
+                    
+                else:
+                    raw_text = msg.content or "I am processing your request."
+                    self.conversation_history.append({"role": "assistant", "content": raw_text})
+                    decision["spoken_response"] = raw_text
                 
-                if decision.get("memory_to_save"):
-                    self.save_to_memory(decision["memory_to_save"])
-                
-                decision["spoken_response"] = decision.get("spoken_response", "").replace("*", "").replace("#", "")
+                decision["spoken_response"] = decision["spoken_response"].replace("*", "").replace("#", "")
                 return decision
                 
             except Exception as e:
+                if "429" in str(e):
+                    print(f"[Groq Brain Error]: Rate Limit Exceeded.")
+                    return {"spoken_response": "I have temporarily exhausted my cognitive token limit on the Groq network. We will need to wait a few minutes for the system to reset.", "ui_action": "none"}
+                
                 if attempt < max_retries - 1:
                     time.sleep(1.5 ** attempt)
                     continue
@@ -147,11 +323,9 @@ class JarvisBrain:
                 
                 raw_text = response.choices[0].message.content
                 
-                # Cross-wire the visual memory into his main text brain
                 self.conversation_history.append({"role": "user", "content": f"[User showed screen. You read: {raw_text}]"})
                 self._trim_memory()
                 
-                # Manually construct the decision JSON so main.py doesn't crash
                 decision = {
                     "spoken_response": raw_text.replace("*", "").replace("#", ""),
                     "ui_action": "none",
