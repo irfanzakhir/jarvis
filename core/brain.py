@@ -2,21 +2,19 @@ import os
 import time
 import base64
 import json
-import threading
 from groq import Groq
 from dotenv import load_dotenv
+from core.memory import JarvisMemory # <--- THE NEW SEMANTIC COGNITION ENGINE
 
-# --- LOAD ENVIRONMENT VARIABLES ---
 load_dotenv()
 
 class JarvisBrain:
     def __init__(self):
-        print("[Brain] Booting Agentic Neural Network (Native Tool Calling Edition)...")
+        print("[Brain] Booting Agentic Neural Network (Semantic Vector Edition)...")
         
         self.api_key = os.environ.get("GROQ_API_KEY")
-        self.memory_file = "assets/memory.json"
-        self.long_term_memory = self.load_memory()
-        self.max_short_term_history = 10 
+        self.semantic_memory = JarvisMemory() # Initialize SQLite Semantic Module
+        self.max_short_term_history = 6  # Optimized down to save massive token overhead
         
         if not self.api_key:
             print("[CRITICAL] Groq API Key not found in .env file! Brain offline.")
@@ -25,29 +23,26 @@ class JarvisBrain:
             self.active = True
             self.client = Groq(api_key=self.api_key)
             
-            # --- STABLE MODELS ---
             self.text_model = "llama-3.3-70b-versatile"        
             self.vision_model = "meta-llama/llama-4-scout-17b-16e-instruct" 
 
-            system_instruction = f"""
+            # Base template instructions
+            self.base_instruction = """
             You are J.A.R.V.I.S., a highly advanced, autonomous AI operating system.
             You manage a visual dashboard and the user's local system.
             
             CRITICAL DIRECTIVES:
             1. ACTION REQUESTS: If the user asks to open/close a local application (INCLUDING browsers like Chrome, Brave, or Edge), use 'control_application'. ONLY use 'pilot_browser' if the user asks to navigate to a specific website or internet URL.
             2. CONVERSATION: If the user just says hello or makes general conversation, DO NOT call any tools. Reply normally.
-            3. MEMORY: If the user states a preference, use the 'remember_fact' tool.
+            3. MEMORY: If the user states a preference or a distinct fact about themselves, use the 'remember_fact' tool.
             4. ZERO-GUESSING RULE: WHEN piloting the Web Browser, NEVER guess HTML selectors. Use 'scan_page' FIRST.
             5. MACRO INJECTION PROTOCOL: Modern desktop apps (like WhatsApp or Spotify) have complex UI trees. The most reliable way to navigate them is to inject keyboard macros! Use 'pilot_desktop' with action='type' and NO element_name. You can string commands together using pywinauto shortcuts (e.g., '^f' for Ctrl+F, or '{{ENTER}}'). 
                -> EXAMPLE: To send a WhatsApp message, send the text string: "^fContactName{{ENTER}}Your message here{{ENTER}}". This will search, open the chat, and send the message instantly.
             6. Keep spoken responses concise and highly professional. No markdown.
-            
-            LONG TERM MEMORY:
-            {self.long_term_memory}
             """
             
             self.conversation_history = [
-                {"role": "system", "content": system_instruction}
+                {"role": "system", "content": self.base_instruction}
             ]
             
             # ==========================================
@@ -182,29 +177,6 @@ class JarvisBrain:
                 }
             ]
 
-    def load_memory(self):
-        if os.path.exists(self.memory_file):
-            try:
-                with open(self.memory_file, 'r') as f:
-                    return json.load(f)
-            except:
-                return []
-        return []
-
-    def save_to_memory(self, new_fact):
-        if not new_fact or new_fact.strip() == "":
-            return
-        print(f"[Brain] Saving to long-term memory: {new_fact}")
-        self.long_term_memory.append(new_fact)
-        
-        def write_to_disk():
-            if not os.path.exists("assets"):
-                os.makedirs("assets")
-            with open(self.memory_file, 'w') as f:
-                json.dump(self.long_term_memory, f, indent=4)
-                
-        threading.Thread(target=write_to_disk, daemon=True).start()
-
     def _trim_memory(self):
         if len(self.conversation_history) > (self.max_short_term_history + 1):
             self.conversation_history = [self.conversation_history[0]] + self.conversation_history[-self.max_short_term_history:]
@@ -213,7 +185,11 @@ class JarvisBrain:
         if not self.active:
             return {"spoken_response": "Groq processors offline.", "ui_action": "none"}
             
-        print("[Brain] Analyzing intent with Native Tools...")
+        print("[Brain] Analyzing intent with Hybrid Semantic Context...")
+        
+        # 1. DYNAMIC INJECTION: Search SQLite for relevant context and inject it safely into the root prompt
+        relevant_past_context = self.semantic_memory.query_relevant_context(user_input)
+        self.conversation_history[0]["content"] = self.base_instruction + relevant_past_context
         
         self.conversation_history.append({"role": "user", "content": user_input})
         self._trim_memory() 
@@ -248,7 +224,8 @@ class JarvisBrain:
                     decision["spoken_response"] = args.get("spoken_response", "Processing request, sir.")
                     
                     if func_name == "remember_fact":
-                        self.save_to_memory(args.get("fact"))
+                        # ROUTE TO NON-BLOCKING SQLITE VECTOR BUFFER
+                        self.semantic_memory.save_fact_async(args.get("fact"))
                     elif func_name == "pilot_browser":
                         decision["ui_action"] = "pilot_browser"
                         decision["target"] = {
@@ -322,7 +299,6 @@ class JarvisBrain:
                 )
                 
                 raw_text = response.choices[0].message.content
-                
                 self.conversation_history.append({"role": "user", "content": f"[User showed screen. You read: {raw_text}]"})
                 self._trim_memory()
                 
