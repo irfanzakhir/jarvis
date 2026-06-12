@@ -11,7 +11,6 @@
             --neon-dim: rgba(0, 212, 255, 0.2);
             --bg-dark: #050508;
             --panel-bg: rgba(0, 10, 20, 0.95);
-            --danger: #ff003c;
         }
 
         body.combat-mode {
@@ -28,6 +27,7 @@
             transition: all 0.5s ease;
         }
 
+        /* THE STRICT CSS GRID */
         .dashboard-grid {
             display: grid; grid-template-columns: 300px 1fr 300px; grid-template-rows: 250px 1fr 250px;
             gap: 20px; width: 95vw; height: 95vh; padding: 20px; box-sizing: border-box;
@@ -67,20 +67,12 @@
         }
         
         .reactor-container {
-            position: absolute;
-            width: 350px; height: 350px;
+            position: absolute; width: 350px; height: 350px;
             display: flex; justify-content: center; align-items: center;
-            contain: strict; 
-            isolation: isolate; 
-            z-index: 1;
+            contain: strict; isolation: isolate; z-index: 1;
         }
         
-        .ring { 
-            position: absolute; border-radius: 50%; box-sizing: border-box; 
-            will-change: transform; 
-            transform-origin: center center;
-        }
-        
+        .ring { position: absolute; border-radius: 50%; box-sizing: border-box; will-change: transform; transform-origin: center center; }
         .ring-1 { width: 340px; height: 340px; border: 2px solid var(--neon-dim); border-top: 2px solid var(--neon); animation: spin 10s linear infinite; }
         .ring-2 { width: 320px; height: 320px; border: 4px dashed var(--neon); animation: spin-reverse 15s linear infinite; opacity: 0.7; }
         .ring-3 { width: 280px; height: 280px; border: 2px dotted var(--neon); animation: spin 8s linear infinite; }
@@ -97,129 +89,63 @@
             z-index: 10; position: relative; text-align: center;
         }
 
-        .scroll-box { 
-            flex: 1; overflow-y: auto; font-size: 12px; padding-right: 15px; 
-            line-height: 1.5; -ms-overflow-style: none; scrollbar-width: none; 
-        }
+        .scroll-box { flex: 1; overflow-y: auto; font-size: 12px; padding-right: 15px; line-height: 1.5; -ms-overflow-style: none; scrollbar-width: none; }
         .scroll-box::-webkit-scrollbar { display: none; }
-
         .graph-container { width: 100%; height: 60px; margin-top: 5px; border-bottom: 1px solid var(--neon-dim); border-left: 1px solid var(--neon-dim); }
 
         .news-overlay {
-            position: absolute;
-            top: -100%; 
-            left: 50%;
-            width: 800px;
-            max-width: 90vw;
-            height: 65vh;
-            background: rgba(0, 5, 10, 0.98);
-            border: 2px solid var(--neon);
-            box-shadow: 0 0 50px rgba(0,0,0,1), 0 0 30px var(--neon-dim);
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            padding: 30px;
-            will-change: top, transform;
-            transform: translateX(-50%) translate3d(0,0,0);
+            position: absolute; top: -100%; left: 50%; width: 800px; max-width: 90vw; height: 65vh;
+            background: rgba(0, 5, 10, 0.98); border: 2px solid var(--neon);
+            box-shadow: 0 0 50px rgba(0,0,0,1), 0 0 30px var(--neon-dim); z-index: 9999;
+            display: flex; flex-direction: column; padding: 30px;
+            will-change: top, transform; transform: translateX(-50%) translate3d(0,0,0);
             transition: top 0.7s cubic-bezier(0.16, 1, 0.3, 1);
         }
-
         .news-overlay.active { top: 15vh; }
-
-        .overlay-header {
-            font-family: 'Orbitron', sans-serif; font-size: 24px; font-weight: 900; letter-spacing: 5px;
-            border-bottom: 2px solid var(--neon); padding-bottom: 15px; margin-bottom: 20px;
-            display: flex; justify-content: space-between;
-        }
-
-        .overlay-content {
-            flex: 1; overflow-y: auto; font-size: 16px; line-height: 1.8;
-            -ms-overflow-style: none; scrollbar-width: none;
-        }
+        .overlay-header { font-family: 'Orbitron', sans-serif; font-size: 24px; font-weight: 900; letter-spacing: 5px; border-bottom: 2px solid var(--neon); padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; }
+        .overlay-content { flex: 1; overflow-y: auto; font-size: 16px; line-height: 1.8; -ms-overflow-style: none; scrollbar-width: none; }
         .overlay-content::-webkit-scrollbar { display: none; }
-
-        .news-overlay::before, .news-overlay::after {
-            content: ''; position: absolute; width: 30px; height: 30px; border: 3px solid var(--neon);
-        }
+        .news-overlay::before, .news-overlay::after { content: ''; position: absolute; width: 30px; height: 30px; border: 3px solid var(--neon); }
         .news-overlay::before { top: -3px; left: -3px; border-right: none; border-bottom: none; }
         .news-overlay::after { bottom: -3px; right: -3px; border-left: none; border-top: none; }
-
         body.combat-mode .news-overlay { border-color: var(--neon); box-shadow: 0 0 50px rgba(0,0,0,1), 0 0 30px rgba(255,0,60,0.5); background: rgba(10, 0, 0, 0.98);}
 
-        @keyframes spin { 
-            0% { transform: translate3d(0,0,0) rotate(0deg); }
-            100% { transform: translate3d(0,0,0) rotate(360deg); } 
-        }
-        @keyframes spin-reverse { 
-            0% { transform: translate3d(0,0,0) rotate(0deg); }
-            100% { transform: translate3d(0,0,0) rotate(-360deg); } 
-        }
+        @keyframes spin { 0% { transform: translate3d(0,0,0) rotate(0deg); } 100% { transform: translate3d(0,0,0) rotate(360deg); } }
+        @keyframes spin-reverse { 0% { transform: translate3d(0,0,0) rotate(0deg); } 100% { transform: translate3d(0,0,0) rotate(-360deg); } }
     </style>
 </head>
 <body>
 
 <div class="dashboard-grid">
-    
     <div class="panel" id="profile">
         <div class="panel-header"><span>SYS.ADMIN</span><span id="profile-status">[OK]</span></div>
         <div>USER: IRFAN<br>ACCESS: TIER 1 OMNI<br>UPLINK: SECURE</div>
     </div>
-
     <div class="panel" id="network">
         <div class="panel-header"><span>NETWORK HUB</span><span id="wifi-ssid">SEARCHING...</span></div>
-        <div style="line-height: 1.8;">
-            SIGNAL STR: <span id="wifi-signal">--</span><br>
-            DOWNLINK: <span id="wifi-dl">0.0 KB/s</span><br>
-            UPLINK: <span id="wifi-up">0.0 KB/s</span><br><br>
-            GATEWAY: <span id="wifi-status">LINKING...</span>
-        </div>
+        <div style="line-height: 1.8;">SIGNAL STR: <span id="wifi-signal">--</span><br>DOWNLINK: <span id="wifi-dl">0.0 KB/s</span><br>UPLINK: <span id="wifi-up">0.0 KB/s</span><br><br>GATEWAY: <span id="wifi-status">LINKING...</span></div>
     </div>
-
     <div class="panel" id="features">
         <div class="panel-header"><span>DEV ROADMAP</span><span>v2.0</span></div>
-        <div class="scroll-box">
-            > Neural TTS... [ONLINE]<br>
-            > Groq LPU Logic... [ONLINE]<br>
-            > Dashboard GUI... [ACTIVE]<br>
-            > Live Telemetry... [ACTIVE]<br>
-            > Executable Build... [PENDING]
-        </div>
+        <div class="scroll-box">> Neural TTS... [ONLINE]<br>> Groq LPU Logic... [ONLINE]<br>> Dashboard GUI... [ACTIVE]<br>> Live Telemetry... [ACTIVE]<br>> Executable Build... [PENDING]</div>
     </div>
-
     <div class="panel" id="diagnostics">
         <div class="panel-header"><span>DIAGNOSTICS</span><span>SYS</span></div>
-        <div class="scroll-box">
-            [OK] MEMORY ALLOC<br>
-            [OK] KERNEL INTEGRITY<br>
-            [OK] AUDIO PIPELINE<br>
-            [OK] GPU RASTERIZATION<br>
-            [OK] NEURAL LINK<br>
-            [OK] SENSOR ARRAYS
-        </div>
+        <div class="scroll-box">[OK] MEMORY ALLOC<br>[OK] KERNEL INTEGRITY<br>[OK] AUDIO PIPELINE<br>[OK] GPU RASTERIZATION<br>[OK] NEURAL LINK<br>[OK] SENSOR ARRAYS</div>
     </div>
-
     <div class="panel" id="security">
         <div class="panel-header"><span>SECURITY CENTER</span><span id="sec-icon">SHIELD</span></div>
         <div>FIREWALL: <span id="fw-status">ACTIVE</span><br>THREATS DETECTED: <span id="threat-count">0</span><br>ENCRYPTION: AES-256</div>
     </div>
-
     <div class="panel" id="query">
         <div class="panel-header" style="justify-content: center; font-size: 18px;"><span>COMMS LINK</span></div>
         <div id="comms-text" style="font-size: 16px; margin-top: 10px;">SYSTEM STANDBY</div>
     </div>
-
     <div class="panel" id="vitals">
         <div class="panel-header"><span>SYSTEM VITALS</span><span>RAW</span></div>
-        <div style="margin-top:5px;">
-            CPU CORE LOAD: <span id="cpu-text">0</span>%
-            <canvas id="cpu-canvas" class="graph-container" width="260" height="60"></canvas>
-        </div>
-        <div style="margin-top:10px;">
-            PHYSICAL RAM: <span id="ram-text">0</span>%
-            <canvas id="ram-canvas" class="graph-container" width="260" height="60"></canvas>
-        </div>
+        <div style="margin-top:5px;">CPU CORE LOAD: <span id="cpu-text">0</span>%<canvas id="cpu-canvas" class="graph-container" width="260" height="60"></canvas></div>
+        <div style="margin-top:10px;">PHYSICAL RAM: <span id="ram-text">0</span>%<canvas id="ram-canvas" class="graph-container" width="260" height="60"></canvas></div>
     </div>
-
     <div class="center-core">
         <div class="reactor-container">
             <div class="ring ring-1"></div>
@@ -232,13 +158,8 @@
 </div>
 
 <div class="news-overlay" id="news-overlay">
-    <div class="overlay-header">
-        <span>GLOBAL INTEL DECRYPTED</span>
-        <span style="font-size: 16px; display: flex; align-items: center;">LIVE FEED</span>
-    </div>
-    <div class="overlay-content" id="overlay-text">
-        PROCESSING DATA ARCHIVES...
-    </div>
+    <div class="overlay-header"><span>GLOBAL INTEL DECRYPTED</span><span style="font-size: 16px; display: flex; align-items: center;">LIVE FEED</span></div>
+    <div class="overlay-content" id="overlay-text">PROCESSING DATA ARCHIVES...</div>
 </div>
 
 <script>
@@ -250,44 +171,27 @@
         const canvas = document.getElementById(canvasId);
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
-        const w = canvas.width;
-        const h = canvas.height;
-        
+        const w = canvas.width, h = canvas.height;
         ctx.clearRect(0, 0, w, h);
-        ctx.beginPath();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        
+        ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2;
         const step = w / (window.dataPoints - 1);
         for (let i = 0; i < window.dataPoints; i++) {
-            const x = i * step;
-            const y = h - (historyArray[i] / 100 * h);
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+            const x = i * step; const y = h - (historyArray[i] / 100 * h);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
-        ctx.stroke();
-        
-        ctx.lineTo(w, h);
-        ctx.lineTo(0, h);
-        ctx.fillStyle = color.startsWith('#') ? color + '33' : color;
-        ctx.fill();
+        ctx.stroke(); ctx.lineTo(w, h); ctx.lineTo(0, h);
+        ctx.fillStyle = color.startsWith('#') ? color + '33' : color; ctx.fill();
     };
 
     window.updateVitals = function(cpu, ram) {
         window.cpuHistory.push(cpu); window.cpuHistory.shift();
         window.ramHistory.push(ram); window.ramHistory.shift();
-        
-        document.getElementById('cpu-text').innerText = cpu;
-        document.getElementById('ram-text').innerText = ram;
-        
-        const isCombat = document.body.classList.contains('combat-mode');
-        const color = isCombat ? '#ff003c' : '#00d4ff';
-        
+        document.getElementById('cpu-text').innerText = cpu; document.getElementById('ram-text').innerText = ram;
+        const color = document.body.classList.contains('combat-mode') ? '#ff003c' : '#00d4ff';
         window.drawGraph('cpu-canvas', window.cpuHistory, color);
         window.drawGraph('ram-canvas', window.ramHistory, color);
     };
 
-    // --- THE NEW WIFI FUNCTION ---
     window.updateWifi = function(data) {
         document.getElementById('wifi-ssid').innerText = data.ssid !== "DISCONNECTED" ? data.ssid : "OFFLINE";
         document.getElementById('wifi-signal').innerText = data.signal;
@@ -310,24 +214,18 @@
 
     window.updateComms = function(status) {
         document.getElementById('comms-text').innerText = status.toUpperCase();
-        if (status.includes("[USER]:")) {
-            document.getElementById('news-overlay').classList.remove('active');
-        }
+        if (status.includes("[USER]:")) { document.getElementById('news-overlay').classList.remove('active'); }
     };
 
     window.setCombatMode = function(state) {
         if (state) {
             document.body.classList.add('combat-mode');
-            document.getElementById('profile-status').innerText = '[RESTRICTED]';
-            document.getElementById('sec-icon').innerText = 'WARNING';
-            document.getElementById('fw-status').innerText = 'MAXIMUM READINESS';
-            document.getElementById('threat-count').innerText = 'MONITORING...';
+            document.getElementById('profile-status').innerText = '[RESTRICTED]'; document.getElementById('sec-icon').innerText = 'WARNING';
+            document.getElementById('fw-status').innerText = 'MAXIMUM READINESS'; document.getElementById('threat-count').innerText = 'MONITORING...';
         } else {
             document.body.classList.remove('combat-mode');
-            document.getElementById('profile-status').innerText = '[OK]';
-            document.getElementById('sec-icon').innerText = 'SHIELD';
-            document.getElementById('fw-status').innerText = 'ACTIVE';
-            document.getElementById('threat-count').innerText = '0';
+            document.getElementById('profile-status').innerText = '[OK]'; document.getElementById('sec-icon').innerText = 'SHIELD';
+            document.getElementById('fw-status').innerText = 'ACTIVE'; document.getElementById('threat-count').innerText = '0';
         }
     };
 </script>

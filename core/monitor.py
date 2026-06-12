@@ -23,7 +23,10 @@ class SystemMonitor:
         while self.running:
             try:
                 socket.setdefaulttimeout(3)
-                socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(("8.8.8.8", 53))
+                # THE FIX: 'with' automatically closes the socket to prevent memory leaks
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.connect(("8.8.8.8", 53))
+                
                 if not self.network_status:
                     self.network_status = True
                     self.alert_callback("[SYSTEM]: UPLINK RESTORED.")

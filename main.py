@@ -138,9 +138,27 @@ class JarvisWorker(QThread):
                     self.status_signal.emit({"log": "[SYSTEM]: PROTOCOL OMEGA ACTIVATED", "action": "combat_on"})
                 elif ui_action == "combat_off":
                     self.status_signal.emit({"log": "[SYSTEM]: RETURNING TO STANDARD OPERATIONS", "action": "combat_off"})
-                elif ui_action == "show_news":
-                    self.status_signal.emit({"log": "[SYSTEM]: ACCESSING GLOBAL NETWORK"})
-                    self.status_signal.emit({"log": spoken_text, "action": "show_news"})
+                
+                # --- RAG DEEP SEARCH (MULTI-TURN LOOP) ---
+                elif ui_action == "deep_search":
+                    self.status_signal.emit({"log": f"[SYSTEM]: INITIATING GLOBAL UPLINK: {target}"})
+                    self.mouth.speak(spoken_text) 
+                    
+                    # 1. Execute the headless web scrape via DDGS
+                    search_results = self.automation.deep_search(target)
+                    
+                    # 2. Push the scraped text directly to the Dashboard's floating News Overlay!
+                    self.status_signal.emit({"log": search_results, "action": "show_news"})
+                    
+                    # 3. Have Jarvis summarize the raw text aloud
+                    self.status_signal.emit({"log": "[SYSTEM]: COMPILING SUMMARY..."})
+                    prompt = f"Summarize these web search results concisely in 1 or 2 sentences for the user to hear: {search_results}"
+                    summary_decision = self.brain.think(prompt)
+                    
+                    summary_text = summary_decision.get("spoken_response", "Search operations concluded.")
+                    self.status_signal.emit({"log": f"[JARVIS]: {summary_text}"})
+                    self.mouth.speak(summary_text)
+                    continue
                 
                 # --- ZERO-LATENCY WEB BROWSER PILOT ---
                 elif ui_action == "pilot_browser":
@@ -214,21 +232,25 @@ class JarvisWorker(QThread):
                     self.status_signal.emit({"log": f"[SYSTEM]: HUNTING PROCESS: '{target.upper()}'"})
                     self.automation.close_named_app(target)
 
-                # --- RAG DEEP SEARCH (MULTI-TURN LOOP) ---
+                # --- THE GLOBAL UPLINK ROUTING ---
                 elif ui_action == "deep_search":
-                    self.status_signal.emit({"log": f"[SYSTEM]: INITIATING DEEP WEB SCRAPE FOR: {target.upper()}"})
+                    self.status_signal.emit({"log": f"[SYSTEM]: INITIATING GLOBAL UPLINK: {target}"})
                     self.mouth.speak(spoken_text) 
                     
-                    scraped_data = self.automation.deep_search(target)
+                    # 1. Execute the headless web scrape via DDGS
+                    search_results = self.automation.deep_search(target)
                     
-                    prompt = f"I scraped this text from the web about '{target}'. Summarize it in 2 or 3 concise sentences to read aloud to the user: {scraped_data}"
-                    self.status_signal.emit({"log": "[SYSTEM]: PARSING SCRAPED DATA..."})
+                    # 2. Push the scraped text directly to the Dashboard's floating News Overlay!
+                    self.status_signal.emit({"log": search_results, "action": "show_news"})
                     
-                    follow_up_decision = self.brain.think(prompt)
+                    # 3. Have Jarvis summarize the raw text aloud
+                    self.status_signal.emit({"log": "[SYSTEM]: COMPILING SUMMARY..."})
+                    prompt = f"Summarize these web search results concisely in 1 or 2 sentences for the user to hear: {search_results}"
+                    summary_decision = self.brain.think(prompt)
                     
-                    spoken_text = follow_up_decision.get("spoken_response", "I could not analyze the data.")
-                    self.status_signal.emit({"log": f"[JARVIS]: {spoken_text}"})
-                    self.mouth.speak(spoken_text)
+                    summary_text = summary_decision.get("spoken_response", "Search operations concluded.")
+                    self.status_signal.emit({"log": f"[JARVIS]: {summary_text}"})
+                    self.mouth.speak(summary_text)
                     continue 
 
                 # --- OPTICAL SCREEN READING ---
@@ -247,6 +269,33 @@ class JarvisWorker(QThread):
                     self.status_signal.emit({"log": f"[JARVIS]: {spoken_text}"})
                     self.mouth.speak(spoken_text)
                     continue 
+                # --- VISION-BASED COORDINATE CLICKING (LEVEL 5 AGENT) ---
+                elif ui_action == "vision_click":
+                    self.status_signal.emit({"log": f"[SYSTEM]: OPTICAL SCAN FOR '{target.upper()}' INITIATED"})
+                    self.mouth.speak(spoken_text)
+
+                    # 1. Take a screenshot from RAM
+                    base64_screen = self.automation.take_screenshot(return_base64=True)
+
+                    # 2. Ask Vision model for exact X/Y coordinates
+                    self.status_signal.emit({"log": "[SYSTEM]: CALCULATING SPATIAL COORDINATES..."})
+                    coords = self.brain.find_coordinates(base64_screen, target)
+
+                    # 3. Execute physical mouse movement
+                    if coords and "x" in coords and "y" in coords:
+                        x, y = int(coords["x"]), int(coords["y"])
+                        self.status_signal.emit({"log": f"[SYSTEM]: TARGET AQUIRED AT X:{x} Y:{y}"})
+                        
+                        import pyautogui
+                        # The "Iron Man" effect: Glide the mouse smoothly to the target in 0.5 seconds
+                        pyautogui.moveTo(x, y, duration=0.5, tween=pyautogui.easeInOutQuad)
+                        pyautogui.click()
+                        
+                        self.status_signal.emit({"log": f"[JARVIS]: Executed visual click on {target}."})
+                    else:
+                        self.status_signal.emit({"log": "[CRITICAL]: TARGET NOT FOUND ON SCREEN."})
+                        self.mouth.speak(f"I could not visually locate the {target} on your screen, sir.")
+                    continue
 
                 # --- HARDWARE CONTROL ---
                 elif ui_action == "vol_up":

@@ -1,11 +1,14 @@
 import cv2
 import threading
 import base64
+import time # NEW: Needed for the failsafe delay
 
 class JarvisEyes:
     def __init__(self, camera_index=0):
         print("[Eyes] Initializing Optical Array (Dedicated Thread)...")
-        self.cap = cv2.VideoCapture(camera_index)
+        
+        # FIX 1: Added cv2.CAP_DSHOW to bypass the buggy MSMF Windows backend
+        self.cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
         
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
@@ -30,6 +33,10 @@ class JarvisEyes:
                 # Thread-safe write
                 with self.lock:
                     self.current_frame = frame.copy()
+            else:
+                # FIX 2: If the camera drops a frame, wait 0.1 seconds before trying again 
+                # to prevent infinite terminal spamming!
+                time.sleep(0.1)
 
     def capture_snapshot(self, return_base64=True):
         """Instantly grabs the frame from RAM with 0.00ms latency."""
@@ -56,4 +63,4 @@ class JarvisEyes:
         if hasattr(self, 'thread'):
             self.thread.join(timeout=1.0)
         if self.cap.isOpened():
-            self.cap.release()
+            self.cap.release() 

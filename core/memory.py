@@ -37,18 +37,26 @@ class JarvisMemory:
     def _get_embedding(self, text):
         """Fetches a high-dimensional vector representation from the cloud with zero local CPU load."""
         if not self.api_key:
+            print("[Memory Engine Error]: GEMINI_API_KEY is missing from your .env file!")
             return None
+            
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={self.api_key}"
+            # FIX: Switched to the new mainline gemini-embedding-001 model
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={self.api_key}"
             payload = {
-                "model": "models/text-embedding-004",
+                "model": "models/gemini-embedding-001",
                 "content": {"parts": [{"text": text}]}
             }
-            response = requests.post(url, json=payload, timeout=4)
+            response = requests.post(url, json=payload, timeout=5) 
+            
             if response.status_code == 200:
                 return response.json()["embedding"]["values"]
+            else:
+                print(f"[Memory Engine Error]: Google API rejected the request. Status {response.status_code}: {response.text}")
+                
         except Exception as e:
-            print(f"[Memory Engine Error]: Failed to fetch embedding: {e}")
+            print(f"[Memory Engine Error]: Failed to connect to Google servers: {e}")
+            
         return None
 
     def _cosine_similarity(self, vec1, vec2):

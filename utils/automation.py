@@ -11,7 +11,9 @@ from bs4 import BeautifulSoup
 from googlesearch import search
 from PIL import Image
 from playwright.sync_api import sync_playwright 
-
+from ddgs import DDGS
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="duckduckgo_search")
 
 class JarvisAutomation:
     def __init__(self):
@@ -105,9 +107,7 @@ class JarvisAutomation:
     # ==========================================
     # 2. ZERO-LATENCY WEB BROWSER PILOT
     # ==========================================
-    # ==========================================
-    # 2. ZERO-LATENCY WEB BROWSER PILOT
-    # ==========================================
+    
     def start_browser(self):
         # SELF-HEALING: Check if the user manually closed the browser
         try:
@@ -247,19 +247,29 @@ class JarvisAutomation:
         return closed_any
 
     def deep_search(self, query):
-        webbrowser.open(f"https://search.brave.com/search?q={query}") 
+        """Headless Backend Search (True AI Data Pipeline using DDGS)"""
+        print(f"[Automation] Hitting secure backend API for: {query}")
+        
         try:
-            for url in search(query, num_results=1):
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-                response = requests.get(url, headers=headers, timeout=5)
-                soup = BeautifulSoup(response.text, 'html.parser')
-                paragraphs = soup.find_all('p')
-                text = " ".join([p.text for p in paragraphs[:4]]) 
-                if text and len(text.strip()) > 20:
-                    return text[:1500] 
+            # Hit the backend API silently (Bypasses Cloudflare/Bot-blockers)
+            results = DDGS().text(query, max_results=3)
+            
+            if not results:
+                return "I could not find any live intelligence on that topic."
+            
+            # Compile the top 3 results into a clean text block
+            compiled_data = "LIVE GLOBAL INTEL:\n\n"
+            for res in results:
+                # Safely extract title and body
+                title = res.get('title', 'Headline')
+                body = res.get('body', 'No details available.')
+                compiled_data += f"[{title}]\n{body}\n\n"
+                
+            return compiled_data[:2000] # Cap the token size to keep the system fast
+            
         except Exception as e:
-            pass
-        return "I could not extract readable text from the target website."
+            print(f"[Automation] Search API Error: {e}")
+            return f"Global uplink failed due to backend exception."
 
     def set_volume(self, action):
         if action == "up":

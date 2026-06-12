@@ -32,13 +32,13 @@ class JarvisBrain:
             You manage a visual dashboard and the user's local system.
             
             CRITICAL DIRECTIVES:
-            1. ACTION REQUESTS: If the user asks to open/close a local application (INCLUDING browsers like Chrome, Brave, or Edge), use 'control_application'. ONLY use 'pilot_browser' if the user asks to navigate to a specific website or internet URL.
-            2. CONVERSATION: If the user just says hello or makes general conversation, DO NOT call any tools. Reply normally.
-            3. MEMORY: If the user states a preference or a distinct fact about themselves, use the 'remember_fact' tool.
-            4. ZERO-GUESSING RULE: WHEN piloting the Web Browser, NEVER guess HTML selectors. Use 'scan_page' FIRST.
-            5. MACRO INJECTION PROTOCOL: Modern desktop apps (like WhatsApp or Spotify) have complex UI trees. The most reliable way to navigate them is to inject keyboard macros! Use 'pilot_desktop' with action='type' and NO element_name. You can string commands together using pywinauto shortcuts (e.g., '^f' for Ctrl+F, or '{{ENTER}}'). 
-               -> EXAMPLE: To send a WhatsApp message, send the text string: "^fContactName{{ENTER}}Your message here{{ENTER}}". This will search, open the chat, and send the message instantly.
-            6. Keep spoken responses concise and highly professional. No markdown.
+            1. SEMANTIC APP RESOLUTION: If the user asks to open a category (e.g., 'social media', 'music', 'browser'), YOU must deduce the most likely installed Windows app (e.g., 'instagram', 'spotify', 'chrome') and pass that EXACT name to 'control_application'.
+            2. GLOBAL INTEL: For news or general questions, ALWAYS use 'search_network'.
+            3. CONVERSATION: If the user just says hello, DO NOT call any tools. Reply normally.
+            4. MEMORY: If the user states a preference, use 'remember_fact'.
+            5. MACRO INJECTION: To type into complex apps, use 'pilot_desktop' with action='type' (e.g., "^fName{ENTER}Msg{ENTER}").
+            6. VISION CLICKING: If the user asks to click a specific button, icon, or visual element on the screen (e.g., "click the search bar", "click the new post button"), YOU MUST use the 'vision_click' tool.
+            7. Keep spoken responses concise and professional.no markdown formatting. Always acknowledge the user's command with a clear spoken_response, even if the UI action is 'none'.
             """
             
             self.conversation_history = [
@@ -105,7 +105,7 @@ class JarvisBrain:
                     "type": "function",
                     "function": {
                         "name": "search_network",
-                        "description": "Searches the global internet/web for information, news, or specific questions.",
+                        "description": "Searches the global internet for current events, news, or specific questions. THIS AUTOMATICALLY SHOWS THE NEWS WIDGET. Do NOT use manage_dashboard for news.",
                         "parameters": {
                             "type": "object",
                             "properties": {
@@ -149,14 +149,29 @@ class JarvisBrain:
                     "type": "function",
                     "function": {
                         "name": "manage_dashboard",
-                        "description": "Controls the Jarvis visual HUD dashboard interface.",
+                        "description": "Controls the Jarvis visual HUD dashboard interface layout window states.",
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "action": {"type": "string", "enum": ["minimize", "maximize", "combat_on", "combat_off", "show_news"]},
+                                "action": {"type": "string", "enum": ["minimize", "maximize", "combat_on", "combat_off"]},
                                 "spoken_response": {"type": "string", "description": "Acknowledgment phrase."}
                             },
                             "required": ["action", "spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "vision_click",
+                        "description": "Uses the optical array to find and click a specific button, icon, or text on the screen.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "target_element": {"type": "string", "description": "The specific button or element to click (e.g., 'Search bar', 'New Post button', 'Login')."},
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase."}
+                            },
+                            "required": ["target_element", "spoken_response"]
                         }
                     }
                 },
@@ -252,6 +267,9 @@ class JarvisBrain:
                         decision["ui_action"] = "read_screen"
                     elif func_name == "control_hardware" or func_name == "manage_dashboard":
                         decision["ui_action"] = args.get("action", "none")
+                    elif func_name == "vision_click":
+                        decision["ui_action"] = "vision_click"
+                        decision["target"] = args.get("target_element", "")
 
                     self.conversation_history.append({"role": "assistant", "content": f"[Tool Executed: {func_name}] {decision['spoken_response']}"})
                     
@@ -315,3 +333,39 @@ class JarvisBrain:
                     continue
                 print(f"[Groq Vision Error]: {e}")
                 return {"spoken_response": "Visual array processing failed.", "ui_action": "none"}
+    def find_coordinates(self, base64_image, target_element, max_retries=3):
+        """Asks the Vision model to map the screen into an exact X,Y pixel grid."""
+        if not self.active: return None
+            
+        print(f"[Brain] Activating Spatial Reasoning Engine for: {target_element}...")
+        
+        prompt = f"Analyze this computer screen. Find the exact center pixel coordinates of the '{target_element}'. Assume the screen resolution is 1920x1080. Respond ONLY with a valid JSON object in this exact format: {{\n\"x\": 960,\n\"y\": 540\n}}. Do not include any other text, markdown, or backticks."
+        
+        vision_messages = [
+            {"role": "user", "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+            ]}
+        ]
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.vision_model,
+                    messages=vision_messages,
+                    temperature=0.1 # Kept extremely low for strict mathematical precision
+                )
+                
+                raw_text = response.choices[0].message.content.strip()
+                # Clean the response to ensure it's pure JSON
+                raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+                
+                coords = json.loads(raw_text)
+                return coords # Returns a dict like {"x": 500, "y": 300}
+                
+            except Exception as e:
+                print(f"[Groq Spatial Error]: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                    continue
+        return None
