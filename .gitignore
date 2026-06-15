@@ -21,3 +21,15 @@ assets/memory.json
 assets/screenshot.png
 assets/screenshot.jpg
 assets/current_vision.jpg
+# Security & Biometrics
+assets/*.yml
+.env
+
+# Local Databases
+memory.db
+*.sqlite3
+
+# Logs & Cache
+*.log
+__pycache__/
+venv/

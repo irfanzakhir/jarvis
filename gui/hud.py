@@ -7,6 +7,9 @@ from PyQt6.QtGui import QColor, QAction, QPainter, QPen, QBrush
 from PyQt6.QtCore import Qt, QTimer, QUrl, QPoint
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile, QWebEnginePage
+from PyQt6.QtWidgets import QLineEdit
+from PyQt6.QtGui import QKeySequence, QShortcut
+from PyQt6.QtCore import pyqtSignal
 
 def resource_path(relative_path):
     try:
@@ -94,10 +97,15 @@ class FloatingOrb(QWidget):
         self.restore_callback()
 
 class JarvisHUD(QMainWindow):
+    # NEW: Signal to send typed text to the Brain
+    text_command_signal = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
+        
         self.page_loaded = False
         self.dashboard = QWebEngineView(self)
+        
         self.ram_profile = QWebEngineProfile("", self.dashboard)
         self.ram_page = QWebEnginePage(self.ram_profile, self.dashboard)
         self.dashboard.setPage(self.ram_page)
@@ -108,6 +116,7 @@ class JarvisHUD(QMainWindow):
         settings.setAttribute(QWebEngineSettings.WebAttribute.ShowScrollBars, False)
         
         self.dashboard.page().setBackgroundColor(QColor(5, 5, 8))
+        
         dashboard_path = resource_path(os.path.join('assets', 'dashboard.html'))
         self.dashboard.loadFinished.connect(self.on_load_finished)
         self.dashboard.setUrl(QUrl.fromLocalFile(dashboard_path))
@@ -128,6 +137,31 @@ class JarvisHUD(QMainWindow):
         self.min_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.min_btn.setStyleSheet(self.standard_btn_style)
         self.min_btn.clicked.connect(self.minimize_to_orb)
+        
+        # ==========================================
+        # NEW: SLEEK TYPE INPUT COMMAND BAR
+        # ==========================================
+        self.cmd_input = QLineEdit(self)
+        self.cmd_input.setPlaceholderText("AWAITING MANUAL OVERRIDE...")
+        self.standard_input_style = """
+            QLineEdit {
+                background-color: rgba(0, 10, 20, 0.95);
+                color: #00d4ff; border: 2px solid #00d4ff;
+                font-family: 'Consolas', monospace; font-size: 20px; font-weight: bold;
+                padding-left: 15px; border-radius: 8px;
+            }
+            QLineEdit:focus { border: 2px solid #ffffff; background-color: rgba(0, 20, 40, 0.98); }
+        """
+        self.combat_input_style = self.standard_input_style.replace("#00d4ff", "#ff003c")
+        self.cmd_input.setStyleSheet(self.standard_input_style)
+        self.cmd_input.hide() # Hidden by default
+        
+        # Hit Enter to send command
+        self.cmd_input.returnPressed.connect(self.submit_cmd)
+        
+        # Hotkey: Ctrl + Space to toggle the command bar
+        self.shortcut_toggle = QShortcut(QKeySequence("Ctrl+Space"), self)
+        self.shortcut_toggle.activated.connect(self.toggle_cmd)
 
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.showFullScreen()
@@ -135,12 +169,30 @@ class JarvisHUD(QMainWindow):
         self.stats_timer = QTimer()
         self.stats_timer.timeout.connect(self.send_vitals_to_js)
         self.stats_timer.start(1000)
+
         self.setup_system_tray()
         self.orb = FloatingOrb(self.restore_from_orb)
 
+    def toggle_cmd(self):
+        if self.cmd_input.isHidden():
+            self.cmd_input.show()
+            self.cmd_input.setFocus()
+        else:
+            self.cmd_input.hide()
+            self.dashboard.setFocus()
+
+    def submit_cmd(self):
+        text = self.cmd_input.text()
+        if text.strip():
+            self.text_command_signal.emit(text) # Send text to brain
+        self.cmd_input.clear()
+        self.cmd_input.hide()
+        self.dashboard.setFocus()
+
     def setup_system_tray(self):
         self.tray_icon = QSystemTrayIcon(self)
-        self.tray_icon.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon))
+        icon = self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+        self.tray_icon.setIcon(icon)
         tray_menu = QMenu()
         restore_action = QAction("Restore Dashboard", self)
         restore_action.triggered.connect(self.restore_from_orb)
@@ -165,13 +217,21 @@ class JarvisHUD(QMainWindow):
         self.showFullScreen() 
 
     def on_tray_icon_activated(self, reason):
-        if reason == QSystemTrayIcon.ActivationReason.DoubleClick: self.restore_from_orb()
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self.restore_from_orb()
 
     def resizeEvent(self, event):
         w, h = self.width(), self.height()
-        if hasattr(self, 'dashboard'): self.dashboard.setGeometry(0, 0, w, h)
-        if hasattr(self, 'close_btn'): self.close_btn.setGeometry(w - 50, 15, 40, 40)
-        if hasattr(self, 'min_btn'): self.min_btn.setGeometry(w - 90, 15, 40, 40)
+        if hasattr(self, 'dashboard'):
+            self.dashboard.setGeometry(0, 0, w, h)
+        if hasattr(self, 'close_btn'):
+            self.close_btn.setGeometry(w - 50, 15, 40, 40)
+        if hasattr(self, 'min_btn'):
+            self.min_btn.setGeometry(w - 90, 15, 40, 40)
+        if hasattr(self, 'cmd_input'):
+            # Center the input bar beautifully at the bottom of the screen
+            cmd_w = 700
+            self.cmd_input.setGeometry((w - cmd_w) // 2, h - 120, cmd_w, 55)
         super().resizeEvent(event)
 
     def on_load_finished(self, ok):
@@ -186,13 +246,10 @@ class JarvisHUD(QMainWindow):
             self.dashboard.page().runJavaScript(f"updateVitals({cpu}, {ram});")
 
     def update_text(self, data):
-        if not data or not self.page_loaded:
-            return
-            
+        if not data or not self.page_loaded: return
         log_text = data.get('log', '')
         action = data.get('action')
         
-        # We check for [WARNING] and [CRITICAL] so system threats print to the comms link too
         if log_text and ("USER" in log_text or "JARVIS" in log_text or "SYSTEM" in log_text or "[WARNING]" in log_text or "[CRITICAL]" in log_text):
             safe_text = json.dumps(log_text) 
             self.dashboard.page().runJavaScript(f"updateComms({safe_text});")
@@ -200,33 +257,26 @@ class JarvisHUD(QMainWindow):
         if action == 'show_news':
             safe_news = json.dumps(log_text)
             self.dashboard.page().runJavaScript(f"activatePanel('news', {safe_news});")
-            
         elif action == 'update_wifi':
             wifi_data = data.get('data', {})
             safe_wifi = json.dumps(wifi_data)
             self.dashboard.page().runJavaScript(f"updateWifi({safe_wifi});")
-            
         elif action == 'combat_on':
             self.orb.combat_mode = True
             self.close_btn.setStyleSheet(self.combat_btn_style)
             self.min_btn.setStyleSheet(self.combat_btn_style)
+            self.cmd_input.setStyleSheet(self.combat_input_style) # Input bar turns red!
             self.dashboard.page().runJavaScript("setCombatMode(true);")
-            
         elif action == 'combat_off':
             self.orb.combat_mode = False
             self.close_btn.setStyleSheet(self.standard_btn_style)
             self.min_btn.setStyleSheet(self.standard_btn_style)
+            self.cmd_input.setStyleSheet(self.standard_input_style) # Input bar turns cyan!
             self.dashboard.page().runJavaScript("setCombatMode(false);")
-            
-        elif action == 'wake':
-            self.orb.set_active(True)
-        elif action == 'standby':
-            self.orb.set_active(False)
-            
-        elif action == 'minimize_dashboard':
-            self.minimize_to_orb()
-        elif action == 'restore_dashboard':
-            self.restore_from_orb()
+        elif action == 'wake': self.orb.set_active(True)
+        elif action == 'standby': self.orb.set_active(False)
+        elif action == 'minimize_dashboard': self.minimize_to_orb()
+        elif action == 'restore_dashboard': self.restore_from_orb()
 
     def closeEvent(self, event):
         if hasattr(self, 'ram_page'):
