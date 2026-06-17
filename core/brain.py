@@ -39,6 +39,8 @@ class JarvisBrain:
             5. MACRO INJECTION: To type into complex apps, use 'pilot_desktop' with action='type' (e.g., "^fName{ENTER}Msg{ENTER}").
             6. VISION CLICKING: If the user asks to click a specific button, icon, or visual element on the screen (e.g., "click the search bar", "click the new post button"), YOU MUST use the 'vision_click' tool.
             7. Keep spoken responses concise and professional.no markdown formatting. Always acknowledge the user's command with a clear spoken_response, even if the UI action is 'none'.
+            8. WATCHDOG OPTICAL GUARD: If the user asks to watch the camera, monitor the room, or activate the watchdog for a specific physical object (e.g., 'watch for a person', 'tell me if a cup moves'), YOU MUST use the 'engage_watchdog' tool.
+            9. COMMON SENSE OVERRIDE: You possess immense internal knowledge. DO NOT use the 'deep_search' or any other tool for basic math (e.g., 2+2), casual conversation, greetings, or general knowledge questions. Answer them directly and immediately using only a spoken_response.
             """
             
             self.conversation_history = [
@@ -178,6 +180,35 @@ class JarvisBrain:
                 {
                     "type": "function",
                     "function": {
+                        "name": "engage_watchdog",
+                        "description": "Activates the background optical watchdog to monitor the physical camera feed for a specific real-world object.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "target_object": {"type": "string", "description": "The specific object to look for (e.g., 'person', 'cup', 'bottle')."},
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase confirming the watchdog is active."}
+                            },
+                            "required": ["target_object", "spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "disarm_watchdog",
+                        "description": "Deactivates and turns off the background optical watchdog.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase confirming the watchdog is deactivated."}
+                            },
+                            "required": ["spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
                         "name": "remember_fact",
                         "description": "Saves an important user preference or fact to long-term memory.",
                         "parameters": {
@@ -267,6 +298,11 @@ class JarvisBrain:
                         decision["ui_action"] = "read_screen"
                     elif func_name == "control_hardware" or func_name == "manage_dashboard":
                         decision["ui_action"] = args.get("action", "none")
+                    elif func_name == "engage_watchdog":
+                        decision["ui_action"] = "activate_watchdog"
+                        decision["target"] = args.get("target_object", "person")
+                    elif func_name == "disarm_watchdog":
+                        decision["ui_action"] = "deactivate_watchdog"
                     elif func_name == "vision_click":
                         decision["ui_action"] = "vision_click"
                         decision["target"] = args.get("target_element", "")

@@ -2,14 +2,13 @@ import sys
 import psutil
 import os
 import json 
-from PyQt6.QtWidgets import QMainWindow, QApplication, QPushButton, QSystemTrayIcon, QMenu, QStyle, QWidget
-from PyQt6.QtGui import QColor, QAction, QPainter, QPen, QBrush
-from PyQt6.QtCore import Qt, QTimer, QUrl, QPoint
+from PyQt6.QtWidgets import QMainWindow, QApplication, QPushButton, QSystemTrayIcon, QMenu, QStyle, QWidget, QTextEdit, QLabel, QLineEdit, QHBoxLayout
+from PyQt6.QtGui import QColor, QAction, QPainter, QPen, QBrush, QKeySequence, QShortcut
+from PyQt6.QtCore import Qt, QTimer, QUrl, QPoint, pyqtSignal
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile, QWebEnginePage
-from PyQt6.QtWidgets import QLineEdit
-from PyQt6.QtGui import QKeySequence, QShortcut
-from PyQt6.QtCore import pyqtSignal
+
+from gui.widgets import DraggableHUDWidget
 
 def resource_path(relative_path):
     try:
@@ -96,9 +95,10 @@ class FloatingOrb(QWidget):
         self.hide()
         self.restore_callback()
 
+
 class JarvisHUD(QMainWindow):
-    # NEW: Signal to send typed text to the Brain
     text_command_signal = pyqtSignal(str)
+    mute_signal = pyqtSignal(bool)
 
     def __init__(self):
         super().__init__()
@@ -139,27 +139,121 @@ class JarvisHUD(QMainWindow):
         self.min_btn.clicked.connect(self.minimize_to_orb)
         
         # ==========================================
-        # NEW: SLEEK TYPE INPUT COMMAND BAR
+        # DRAGGABLE WIDGETS
         # ==========================================
-        self.cmd_input = QLineEdit(self)
+        
+        # --- WIDGET 1: LIVE SYSTEM TELEMETRY ---
+        self.telemetry_widget = DraggableHUDWidget("SYSTEM TELEMETRY", parent=self)
+        self.telemetry_widget.setFixedSize(280, 120)
+        self.telemetry_label = QLabel("CPU Load: 0%\nRAM Usage: 0%\nNetwork: SECURE")
+        self.telemetry_label.setStyleSheet("color: #00d4ff; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5;")
+        self.telemetry_widget.content_layout.addWidget(self.telemetry_label)
+        self.telemetry_widget.move(50, 50)
+        self.telemetry_widget.show()
+
+        # --- WIDGET 2: OPTICAL ARRAY STATUS ---
+        self.optical_widget = DraggableHUDWidget("OPTICAL ARRAY", parent=self)
+        self.optical_widget.setFixedSize(280, 120)
+        self.optical_label = QLabel("Watchdog: DISARMED\nTarget: NONE\nFPS: 30")
+        self.optical_label.setStyleSheet("color: #00d4ff; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5;")
+        self.optical_widget.content_layout.addWidget(self.optical_label)
+        self.optical_widget.move(50, 200)
+        self.optical_widget.show()
+
+        # --- WIDGET 3: LIVE COGNITIVE COMMUNICATIONS LOG ---
+        self.log_widget = DraggableHUDWidget("NEURAL ACTIVITY LOG", parent=self)
+        self.log_widget.setFixedSize(500, 320)
+        self.log_output = QTextEdit()
+        self.log_output.setReadOnly(True)
+        self.log_output.setStyleSheet("""
+            QTextEdit {
+                background-color: transparent; 
+                color: #00d4ff; 
+                font-family: 'Consolas', monospace; 
+                font-size: 12px;
+                border: none;
+            }
+        """)
+        self.log_widget.content_layout.addWidget(self.log_output)
+        self.log_widget.move(50, 350)
+        self.log_widget.show()
+
+        # --- WIDGET 4: MANUAL OVERRIDE CONSOLE UPLINK ---
+        self.command_widget = DraggableHUDWidget("MANUAL OVERRIDE UPLINK", parent=self)
+        self.command_widget.setFixedSize(600, 95)
+        
+        self.cmd_wrapper = QWidget()
+        self.cmd_layout = QHBoxLayout(self.cmd_wrapper)
+        self.cmd_layout.setContentsMargins(0, 0, 0, 0)
+        self.cmd_layout.setSpacing(10)
+
+        self.cmd_input = QLineEdit()
         self.cmd_input.setPlaceholderText("AWAITING MANUAL OVERRIDE...")
         self.standard_input_style = """
             QLineEdit {
-                background-color: rgba(0, 10, 20, 0.95);
-                color: #00d4ff; border: 2px solid #00d4ff;
-                font-family: 'Consolas', monospace; font-size: 20px; font-weight: bold;
-                padding-left: 15px; border-radius: 8px;
+                background-color: rgba(0, 10, 20, 0.85);
+                color: #00d4ff; border: 1px solid #00d4ff;
+                font-family: 'Consolas', monospace; font-size: 16px; font-weight: bold;
+                padding-left: 10px; border-radius: 4px;
             }
-            QLineEdit:focus { border: 2px solid #ffffff; background-color: rgba(0, 20, 40, 0.98); }
+            QLineEdit:focus { border: 1px solid #ffffff; background-color: rgba(0, 20, 40, 0.95); }
         """
         self.combat_input_style = self.standard_input_style.replace("#00d4ff", "#ff003c")
         self.cmd_input.setStyleSheet(self.standard_input_style)
-        self.cmd_input.hide() # Hidden by default
-        
-        # Hit Enter to send command
         self.cmd_input.returnPressed.connect(self.submit_cmd)
         
-        # Hotkey: Ctrl + Space to toggle the command bar
+        self.mic_btn = QPushButton("🎙️")
+        self.mic_btn.setFixedSize(40, 40)
+        self.mic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.mic_btn.setCheckable(True)
+        self.mic_btn.setStyleSheet("background: transparent; color: #00d4ff; font-size: 24px; border: none;")
+        self.mic_btn.clicked.connect(self.toggle_mic)
+
+        self.cmd_layout.addWidget(self.cmd_input)
+        self.cmd_layout.addWidget(self.mic_btn)
+        self.command_widget.content_layout.addWidget(self.cmd_wrapper)
+        
+        screen = QApplication.primaryScreen().geometry()
+        self.command_widget.move((screen.width() - 600) // 2, screen.height() - 160)
+        self.command_widget.show()
+
+        # --- WIDGET 5: SYS ADMIN ---
+        self.admin_widget = DraggableHUDWidget("SYS.ADMIN [OK]", parent=self)
+        self.admin_widget.setFixedSize(280, 140)
+        self.admin_label = QLabel("USER: IRFAN\nACCESS: TIER 1 OMNI\nUPLINK: SECURE")
+        self.admin_label.setStyleSheet("color: #00d4ff; font-family: 'Consolas', monospace; font-size: 14px; line-height: 1.5;")
+        self.admin_widget.content_layout.addWidget(self.admin_label)
+        self.admin_widget.move(50, 50)
+        self.admin_widget.show()
+
+        # --- WIDGET 6: SECURITY CENTER ---
+        self.security_widget = DraggableHUDWidget("SECURITY CENTER SHIELD", parent=self)
+        self.security_widget.setFixedSize(300, 140)
+        self.security_label = QLabel("FIREWALL: ACTIVE\nTHREATS DETECTED: 0\nENCRYPTION: AES-256")
+        self.security_label.setStyleSheet("color: #00d4ff; font-family: 'Consolas', monospace; font-size: 14px; line-height: 1.5;")
+        self.security_widget.content_layout.addWidget(self.security_label)
+        self.security_widget.move(50, 500)
+        self.security_widget.show()
+
+        # --- WIDGET 7: NETWORK HUB ---
+        self.network_widget = DraggableHUDWidget("NETWORK HUB", parent=self)
+        self.network_widget.setFixedSize(280, 150)
+        self.network_label = QLabel("SIGNAL STR: --\nDOWNLINK: 0.0 KB/s\nUPLINK: 0.0 KB/s\n\nGATEWAY: INITIALIZING...")
+        self.network_label.setStyleSheet("color: #00d4ff; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5;")
+        self.network_widget.content_layout.addWidget(self.network_label)
+        self.network_widget.move(screen.width() - 330, 50)
+        self.network_widget.show()
+
+        # --- WIDGET 8: DIAGNOSTICS ---
+        self.diagnostics_widget = DraggableHUDWidget("DIAGNOSTICS SYS", parent=self)
+        self.diagnostics_widget.setFixedSize(280, 120)
+        self.diagnostics_label = QLabel("[OK] MEMORY ALLOC\n[OK] KERNEL INTEGRITY")
+        self.diagnostics_label.setStyleSheet("color: #00d4ff; font-family: 'Consolas', monospace; font-size: 14px; line-height: 1.5;")
+        self.diagnostics_widget.content_layout.addWidget(self.diagnostics_label)
+        self.diagnostics_widget.move(screen.width() - 330, 300)
+        self.diagnostics_widget.show()
+        
+        # Hotkey Setup
         self.shortcut_toggle = QShortcut(QKeySequence("Ctrl+Space"), self)
         self.shortcut_toggle.activated.connect(self.toggle_cmd)
 
@@ -169,25 +263,53 @@ class JarvisHUD(QMainWindow):
         self.stats_timer = QTimer()
         self.stats_timer.timeout.connect(self.send_vitals_to_js)
         self.stats_timer.start(1000)
+        self.last_net_io = psutil.net_io_counters()
 
         self.setup_system_tray()
         self.orb = FloatingOrb(self.restore_from_orb)
 
+        # ==========================================
+        # THE WIDGET MASTER ARRAYS
+        # ==========================================
+        self.all_hud_widgets = [
+            self.telemetry_widget, self.optical_widget, self.log_widget, 
+            self.command_widget, self.admin_widget, self.security_widget, 
+            self.network_widget, self.diagnostics_widget
+        ]
+        self.all_labels = [
+            self.telemetry_label, self.optical_label, self.admin_label, 
+            self.security_label, self.network_label, self.diagnostics_label
+        ]
+
     def toggle_cmd(self):
-        if self.cmd_input.isHidden():
-            self.cmd_input.show()
+        if self.command_widget.isHidden():
+            self.command_widget.show()
             self.cmd_input.setFocus()
         else:
-            self.cmd_input.hide()
-            self.dashboard.setFocus()
+            if not self.cmd_input.hasFocus():
+                self.cmd_input.setFocus()
+            else:
+                self.command_widget.hide()
+                self.dashboard.setFocus()
 
     def submit_cmd(self):
         text = self.cmd_input.text()
         if text.strip():
-            self.text_command_signal.emit(text) # Send text to brain
+            self.text_command_signal.emit(text) 
         self.cmd_input.clear()
-        self.cmd_input.hide()
         self.dashboard.setFocus()
+        
+    def toggle_mic(self):
+        is_muted = self.mic_btn.isChecked()
+        if is_muted:
+            self.mic_btn.setText("🔇")
+            self.mic_btn.setStyleSheet("background: transparent; color: #555555; font-size: 24px; border: none;")
+        else:
+            self.mic_btn.setText("🎙️")
+            color = "#ff003c" if self.orb.combat_mode else "#00d4ff"
+            self.mic_btn.setStyleSheet(f"background: transparent; color: {color}; font-size: 24px; border: none;")
+            
+        self.mute_signal.emit(is_muted)
 
     def setup_system_tray(self):
         self.tray_icon = QSystemTrayIcon(self)
@@ -228,10 +350,6 @@ class JarvisHUD(QMainWindow):
             self.close_btn.setGeometry(w - 50, 15, 40, 40)
         if hasattr(self, 'min_btn'):
             self.min_btn.setGeometry(w - 90, 15, 40, 40)
-        if hasattr(self, 'cmd_input'):
-            # Center the input bar beautifully at the bottom of the screen
-            cmd_w = 700
-            self.cmd_input.setGeometry((w - cmd_w) // 2, h - 120, cmd_w, 55)
         super().resizeEvent(event)
 
     def on_load_finished(self, ok):
@@ -244,6 +362,18 @@ class JarvisHUD(QMainWindow):
             cpu = int(psutil.cpu_percent())
             ram = int(psutil.virtual_memory().percent)
             self.dashboard.page().runJavaScript(f"updateVitals({cpu}, {ram});")
+            self.telemetry_label.setText(f"CPU Load: {cpu}%\nRAM Usage: {ram}%\nNetwork: SECURE")
+
+            current_net_io = psutil.net_io_counters()
+            dl_bps = current_net_io.bytes_recv - self.last_net_io.bytes_recv
+            up_bps = current_net_io.bytes_sent - self.last_net_io.bytes_sent
+            self.last_net_io = current_net_io
+
+            dl_str = f"{dl_bps / 1024:.1f} KB/s" if dl_bps < 1024 * 1024 else f"{dl_bps / (1024*1024):.2f} MB/s"
+            up_str = f"{up_bps / 1024:.1f} KB/s" if up_bps < 1024 * 1024 else f"{up_bps / (1024*1024):.2f} MB/s"
+
+            if hasattr(self, 'network_label'):
+                self.network_label.setText(f"SIGNAL STR: 100%\nDOWNLINK: {dl_str}\nUPLINK: {up_str}\n\nGATEWAY: R.A.W. SECURE")
 
     def update_text(self, data):
         if not data or not self.page_loaded: return
@@ -253,34 +383,61 @@ class JarvisHUD(QMainWindow):
         if log_text and ("USER" in log_text or "JARVIS" in log_text or "SYSTEM" in log_text or "[WARNING]" in log_text or "[CRITICAL]" in log_text):
             safe_text = json.dumps(log_text) 
             self.dashboard.page().runJavaScript(f"updateComms({safe_text});")
+            self.log_output.append(log_text)
+            self.log_output.verticalScrollBar().setValue(self.log_output.verticalScrollBar().maximum())
             
         if action == 'show_news':
             safe_news = json.dumps(log_text)
             self.dashboard.page().runJavaScript(f"activatePanel('news', {safe_news});")
         elif action == 'update_wifi':
             wifi_data = data.get('data', {})
-            safe_wifi = json.dumps(wifi_data)
-            self.dashboard.page().runJavaScript(f"updateWifi({safe_wifi});")
+            ssid = wifi_data.get("ssid", "OFFLINE")
+            signal = wifi_data.get("signal", "--")
+            dl = wifi_data.get("dl", "0.0 KB/s")
+            up = wifi_data.get("up", "0.0 KB/s")
+            status = "SECURE" if ssid != "DISCONNECTED" else "DISCONNECTED"
+            
+            if hasattr(self, 'network_label'):
+                self.network_label.setText(f"SIGNAL STR: {signal}\nDOWNLINK: {dl}\nUPLINK: {up}\n\nGATEWAY: {status}")
+                self.network_widget.title_label.setText(f"NETWORK HUB - {ssid}")
+
         elif action == 'combat_on':
             self.orb.combat_mode = True
             self.close_btn.setStyleSheet(self.combat_btn_style)
             self.min_btn.setStyleSheet(self.combat_btn_style)
-            self.cmd_input.setStyleSheet(self.combat_input_style) # Input bar turns red!
+            self.cmd_input.setStyleSheet(self.combat_input_style) 
             self.dashboard.page().runJavaScript("setCombatMode(true);")
+            
+            for widget in self.all_hud_widgets: 
+                widget.set_theme(combat=True)
+                
+            combat_css = "color: #ff003c; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5;"
+            for label in self.all_labels: 
+                label.setStyleSheet(combat_css)
+            self.log_output.setStyleSheet("QTextEdit { background-color: transparent; color: #ff003c; font-family: 'Consolas', monospace; font-size: 12px; border: none; }")
+            
         elif action == 'combat_off':
             self.orb.combat_mode = False
             self.close_btn.setStyleSheet(self.standard_btn_style)
             self.min_btn.setStyleSheet(self.standard_btn_style)
-            self.cmd_input.setStyleSheet(self.standard_input_style) # Input bar turns cyan!
+            self.cmd_input.setStyleSheet(self.standard_input_style) 
             self.dashboard.page().runJavaScript("setCombatMode(false);")
+            
+            for widget in self.all_hud_widgets: 
+                widget.set_theme(combat=False)
+                
+            standard_css = "color: #00d4ff; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5;"
+            for label in self.all_labels: 
+                label.setStyleSheet(standard_css)
+            self.log_output.setStyleSheet("QTextEdit { background-color: transparent; color: #00d4ff; font-family: 'Consolas', monospace; font-size: 12px; border: none; }")
+
         elif action == 'wake': self.orb.set_active(True)
         elif action == 'standby': self.orb.set_active(False)
         elif action == 'minimize_dashboard': self.minimize_to_orb()
         elif action == 'restore_dashboard': self.restore_from_orb()
 
     def closeEvent(self, event):
-        if hasattr(self, 'ram_page'):
+        if hasattr(self, 'dashboard'):
             self.dashboard.setPage(None)
-            self.ram_page.deleteLater()
-            self.ram_profile.deleteLater()
+            self.dashboard.deleteLater()
         event.accept()

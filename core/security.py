@@ -22,7 +22,7 @@ class BiometricSecurity:
 
         # Lower is stricter. 60 is usually a very solid match. 
         # If Jarvis doesn't recognize you easily, increase this to 70 or 80.
-        self.confidence_threshold = 40 
+        self.confidence_threshold = 50 
 
     def scan_for_presence(self, frame):
         """Authenticates the frame against the Admin's facial geometry."""

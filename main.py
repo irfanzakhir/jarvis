@@ -3,6 +3,8 @@ import time
 import keyboard
 import logging
 import threading
+import cv2
+import base64
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QThread, pyqtSignal
 import queue
@@ -14,6 +16,8 @@ from core.eyes import JarvisEyes
 from core.monitor import SystemMonitor 
 from utils.automation import JarvisAutomation
 from core.security import BiometricSecurity
+# Watchdog import temporarily disabled for Phase 1 integration
+# from core.watchdog import VisionWatchdog 
 
 # ==========================================
 # 1. SYSTEM LOGGING & CRASH INTERCEPTOR
@@ -44,28 +48,155 @@ sys.argv.append("--mute-audio")
 sys.argv.append("--enable-zero-copy")
 sys.argv.append("--num-raster-threads=4") 
 
+# ==========================================
+# PHASE 1: THE VISION MULTIPLEXER
+# ==========================================
+class VisionMultiplexer(QThread):
+    auth_signal = pyqtSignal(bool)
+    kinetic_signal = pyqtSignal(dict)
+    
+    def __init__(self, security):
+        super().__init__()
+        self.security = security
+        self.running = True
+        self.current_mode = "SECURITY" 
+        self.watchdog_target = None
+        self.latest_frame = None
+        
+        # --- KINETIC ENGINE SETUP ---
+        from core.kinetic import KineticEngine
+        self.kinetic_engine = KineticEngine(smoothing_factor=0.25, pinch_engage_threshold=0.04, pinch_release_threshold=0.055)
+        
+        import ctypes
+        self.user32 = ctypes.windll.user32
+        self.screen_w = self.user32.GetSystemMetrics(0) # Grabs your exact monitor width
+        self.screen_h = self.user32.GetSystemMetrics(1) # Grabs your exact monitor height
+        self.was_left_pinched = False
+        self.was_right_pinched = False
 
+    def set_vision_mode(self, mode: str, target=None):
+        if mode in ["SECURITY", "WATCHDOG", "KINETIC", "IDLE"]:
+            self.current_mode = mode
+            self.watchdog_target = target
+            logger.info(f"[VISION MASTER]: Multiplexer shifted to {mode} mode.")
 
+    def get_base64_snapshot(self):
+        """Allows LLM to instantly pull the current frame without opening a new camera thread"""
+        if self.latest_frame is not None:
+            _, buffer = cv2.imencode('.jpg', self.latest_frame)
+            return base64.b64encode(buffer).decode('utf-8')
+        return None
+
+    def run(self):
+        # Universal Hardware Access Point (Reserves the camera globally)
+        cap = cv2.VideoCapture(0)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FPS, 30)
+
+        while self.running:
+            ret, frame = cap.read()
+            if not ret:
+                time.sleep(0.03)
+                continue
+            
+            # Store frame for immediate snapshots
+            self.latest_frame = frame
+
+            # ----------------------------------------
+            # EXCLUSIVE PIPELINE ROUTING
+            # ----------------------------------------
+            if self.current_mode == "SECURITY":
+                if self.security.scan_for_presence(frame):
+                    self.auth_signal.emit(True)
+                    # Instantly shift to IDLE to free CPU once authenticated!
+                    self.current_mode = "IDLE" 
+                    time.sleep(1) 
+                    
+            elif self.current_mode == "KINETIC":
+                frame, telemetry = self.kinetic_engine.process_frame(frame)
+                
+                if telemetry:
+                    cam_x, cam_y = telemetry["x"], telemetry["y"]
+                    cam_w, cam_h = telemetry["frame_w"], telemetry["frame_h"]
+
+                    mirrored_x = cam_w - cam_x
+                    screen_x = int((mirrored_x / cam_w) * self.screen_w)
+                    screen_y = int((cam_y / cam_h) * self.screen_h)
+
+                    self.user32.SetCursorPos(screen_x, screen_y)
+
+                    import pyautogui
+                    pyautogui.FAILSAFE = False 
+                    pyautogui.PAUSE = 0
+                    
+                    is_left_pinched = telemetry["is_left_pinched"]
+                    is_right_pinched = telemetry["is_right_pinched"]
+                    
+                    # LEFT CLICK & DRAG (Index + Thumb)
+                    if is_left_pinched and not self.was_left_pinched:
+                        pyautogui.mouseDown(button='left')
+                        self.was_left_pinched = True
+                    elif not is_left_pinched and self.was_left_pinched:
+                        pyautogui.mouseUp(button='left')
+                        self.was_left_pinched = False
+                        
+                    # RIGHT CLICK (Middle + Thumb)
+                    # We use standard .click() for right clicks so it doesn't accidentally drag menus
+                    if is_right_pinched and not self.was_right_pinched:
+                        pyautogui.click(button='right')
+                        self.was_right_pinched = True
+                    elif not is_right_pinched and self.was_right_pinched:
+                        self.was_right_pinched = False
+                
+            elif self.current_mode == "WATCHDOG":
+                # [Phase 2 Placeholder: Motion Detection Math]
+                pass
+                
+            elif self.current_mode == "IDLE":
+                # Hardware stays hot, but zero heavy neural calculations occur
+                time.sleep(0.03)
+
+        cap.release()
+
+# ==========================================
+# 3. JARVIS WORKER ENGINE
+# ==========================================
 class JarvisWorker(QThread):
     status_signal = pyqtSignal(dict)
 
-    def __init__(self, ears, brain, mouth, eyes, automation, security):
+    def __init__(self, ears, brain, mouth, automation, security):
         super().__init__()
         self.ears = ears
         self.brain = brain
         self.mouth = mouth
-        self.eyes = eyes
         self.automation = automation
         self.security = security 
+        self.is_mic_muted = False
         
         self.command_queue = queue.Queue()
         
-        # FIX: The system now starts in a securely locked state!
         self.system_locked = True 
         self.first_boot = True 
         
+        # Initialize the Vision Multiplexer
+        self.vision_master = VisionMultiplexer(security)
+        self.vision_master.auth_signal.connect(self.handle_auth)
+        self.vision_master.start(QThread.Priority.HighPriority)
+        
         keyboard.on_press_key("enter", self.intercept_audio)
-        logger.info("Global audio intercept hook (Enter) initialized.")
+        logger.info("Global audio intercept hook initialized.")
+
+    def handle_auth(self, success):
+        """Triggered automatically by the Vision Multiplexer when your face is recognized"""
+        if success and self.system_locked:
+            self.system_locked = False
+            if self.first_boot:
+                self.status_signal.emit({"log": "[SECURITY]: ADMIN VERIFIED. INITIATING BOOT.", "action": "combat_off"})
+                self.first_boot = False
+            else:
+                self.status_signal.emit({"log": "[SECURITY]: BIOMETRIC MATCH. WAKING SYSTEM.", "action": "restore_dashboard"})
+                self.mouth.speak("Welcome back, sir. System restored.")
 
     def intercept_audio(self, event):
         if self.mouth.is_speaking():
@@ -79,10 +210,18 @@ class JarvisWorker(QThread):
 
     def audio_listener_loop(self):
         while True:
-            text = self.ears.listen()
-            if text and len(text.strip()) > 3:
-                self.command_queue.put(text)
-            time.sleep(0.1)
+            if not self.is_mic_muted:
+                text = self.ears.listen()
+                if text and len(text.strip()) > 3:
+                    self.command_queue.put(text)
+                time.sleep(0.1)
+            else:
+                time.sleep(0.5)
+            
+    def set_mute_state(self, is_muted):
+        self.is_mic_muted = is_muted
+        state_log = "[SYSTEM]: AUDIO PIPELINE MUTED" if is_muted else "[SYSTEM]: AUDIO PIPELINE ACTIVE"
+        self.status_signal.emit({"log": state_log})
 
     def handle_system_alert(self, msg):
         if isinstance(msg, dict):
@@ -96,36 +235,16 @@ class JarvisWorker(QThread):
         elif "[CRITICAL]" in msg:
             threading.Thread(target=self.mouth.speak, args=("Critical alert. Secure uplink to the global network has been severed.",), daemon=True).start()
 
-    # THE UPDATED SECURITY LOOP
-    def biometric_scanner_loop(self):
-        while True:
-            if self.system_locked:
-                frame, error = self.eyes.capture_snapshot(return_base64=False)
-                
-                if frame is not None and self.security.scan_for_presence(frame):
-                    self.system_locked = False
-                    
-                    # If this is the initial boot, clear the combat UI and proceed.
-                    if self.first_boot:
-                        self.status_signal.emit({"log": "[SECURITY]: ADMIN VERIFIED. INITIATING BOOT.", "action": "combat_off"})
-                        self.first_boot = False
-                    # If this is a wake-from-minimize, restore the window and say hello.
-                    else:
-                        self.status_signal.emit({"log": "[SECURITY]: BIOMETRIC MATCH. WAKING SYSTEM.", "action": "restore_dashboard"})
-                        self.mouth.speak("Welcome back, sir. System restored.")
-            
-            time.sleep(0.5)
-
     def run(self):
-        # 1. Start the Biometric Scanner Thread IMMEDIATELY
-        threading.Thread(target=self.biometric_scanner_loop, daemon=True).start()
+        # 1. Put the Multiplexer into Security Mode
+        self.vision_master.set_vision_mode("SECURITY")
         
         # 2. Put the HUD into a locked, secure red state
         time.sleep(1)
         self.status_signal.emit({"log": "AWAITING BIOMETRIC AUTHENTICATION...", "action": "combat_on"})
         self.mouth.speak("System locked. Awaiting biometric authentication.")
 
-        # 3. HALT THE SYSTEM: It will wait here infinitely at 0% CPU until you are recognized
+        # 3. HALT THE SYSTEM: Wait for the Multiplexer to trigger self.handle_auth
         while self.system_locked:
             time.sleep(0.5)
             
@@ -142,10 +261,7 @@ class JarvisWorker(QThread):
             self.status_signal.emit({"log": log})
             time.sleep(0.6) 
 
-        # Start the hardware telemetry AFTER you authenticate
         self.monitor = SystemMonitor(alert_callback=self.handle_system_alert)
-        
-        # Start the ears in the background AFTER you authenticate
         threading.Thread(target=self.audio_listener_loop, daemon=True).start()
         
         logger.info("UI Cold Start complete. Agentic loop running.")
@@ -153,22 +269,39 @@ class JarvisWorker(QThread):
         
         vision_triggers = ["look", "see", "what is this", "who is", "describe this"]
         
-        
         while True:
             self.status_signal.emit({"action": "standby"})
-            
-            # THE MAGIC: This blocks at 0% CPU until you speak OR type a command!
             user_input = self.command_queue.get() 
+            
+            if user_input.startswith("watchdog_alert:"):
+                alert_target = user_input.split(":")[-1].strip()
+                self.status_signal.emit({"log": f"[WARNING]: {alert_target.upper()} DETECTED IN OPTICAL SECTOR."})
+                self.mouth.speak(f"Sir, the optical watchdog has detected the {alert_target}.")
+                continue 
             
             self.status_signal.emit({"action": "wake"})
             self.status_signal.emit({"log": f"[USER]: {user_input}"})
             logger.info(f"Command Injected: {user_input}")
             
             user_lower = user_input.lower().replace(".", "").replace(",", "")
+            # --- HARDWARE OVERRIDES FOR KINETIC MODE ---
+            if "enable kinetic" in user_lower or "kinetic mode on" in user_lower:
+                self.status_signal.emit({"log": "[SYSTEM]: KINETIC INTERFACE ONLINE. RAISE YOUR HAND."})
+                self.vision_master.set_vision_mode("KINETIC")
+                self.mouth.speak("Kinetic interface online. You have the conn, sir.")
+                continue
+                
+            elif "disable kinetic" in user_lower or "kinetic mode off" in user_lower:
+                self.status_signal.emit({"log": "[SYSTEM]: KINETIC INTERFACE OFFLINE."})
+                self.vision_master.set_vision_mode("IDLE")
+                self.mouth.speak("Kinetic interface disabled.")
+                continue
             
-            if any(trigger in user_lower for trigger in vision_triggers):
+            # Use Multiplexer to instantly grab the frame for LLM Vision!
+            if "watchdog" not in user_lower and any(trigger in user_lower for trigger in vision_triggers):
                 self.status_signal.emit({"log": "[SYSTEM]: OPTICAL ARRAY ENGAGED"})
-                base64_image, img_path = self.eyes.capture_snapshot()
+                base64_image = self.vision_master.get_base64_snapshot()
+                
                 if base64_image:
                     decision = self.brain.analyze_image(base64_image, user_input)
                 else:
@@ -187,16 +320,26 @@ class JarvisWorker(QThread):
             # ==========================================
             
             if ui_action == "minimize":
-                self.system_locked = True # Arms the Biometric Scanner
+                self.system_locked = True 
+                self.vision_master.set_vision_mode("SECURITY")
                 self.status_signal.emit({"log": "[SYSTEM]: ENTERING STANDBY. ARMING CAMERA.", "action": "minimize_dashboard"})
             elif ui_action == "maximize":
-                self.system_locked = False # Disarms the Biometric Scanner
+                self.system_locked = False 
+                self.vision_master.set_vision_mode("IDLE")
                 self.status_signal.emit({"log": "[SYSTEM]: RESTORING UI", "action": "restore_dashboard"})
             elif ui_action == "combat_on":
                 self.status_signal.emit({"log": "[SYSTEM]: PROTOCOL OMEGA ACTIVATED", "action": "combat_on"})
             elif ui_action == "combat_off":
                 self.status_signal.emit({"log": "[SYSTEM]: RETURNING TO STANDARD OPERATIONS", "action": "combat_off"})
             
+            # --- watchdog ---
+            elif ui_action == "activate_watchdog":
+                self.status_signal.emit({"log": f"[SYSTEM]: ROUTING CAMERA TO WATCHDOG: {target}"})
+                self.vision_master.set_vision_mode("WATCHDOG", target)
+            elif ui_action == "deactivate_watchdog":
+                self.status_signal.emit({"log": "[SYSTEM]: DISARMING WATCHDOG"})
+                self.vision_master.set_vision_mode("IDLE")
+
             # --- ZERO-LATENCY WEB BROWSER PILOT ---
             elif ui_action == "pilot_browser":
                 action_type = target.get("action", "")
@@ -273,7 +416,7 @@ class JarvisWorker(QThread):
                 self.mouth.speak(summary_text)
                 continue 
 
-            # --- VISION-BASED COORDINATE CLICKING (LEVEL 5 AGENT) ---
+            # --- VISION-BASED COORDINATE CLICKING ---
             elif ui_action == "vision_click":
                 self.status_signal.emit({"log": f"[SYSTEM]: OPTICAL SCAN FOR '{target.upper()}' INITIATED"})
                 self.mouth.speak(spoken_text)
@@ -339,9 +482,8 @@ def main():
         brain = JarvisBrain()
         ears = JarvisEars()
         mouth = JarvisMouth()
-        eyes = JarvisEyes()
         automation = JarvisAutomation()
-        security = BiometricSecurity() # NEW: Initialize Security
+        security = BiometricSecurity() 
         logger.info("All core modules initialized successfully.")
     except Exception as e:
         logger.critical("CRITICAL BUILD FAULT during initialization.", exc_info=True)
@@ -351,12 +493,11 @@ def main():
     hud = JarvisHUD()
     hud.show()
 
-    # Pass the security module into the worker
-    worker = JarvisWorker(ears, brain, mouth, eyes, automation, security)
-    worker.status_signal.connect(hud.update_text)
+    worker = JarvisWorker(ears, brain, mouth, automation, security)
     
-    # NEW: Connect the GUI Text Input directly to the Worker Queue!
+    worker.status_signal.connect(hud.update_text)
     hud.text_command_signal.connect(worker.receive_text_command)
+    hud.mute_signal.connect(worker.set_mute_state)
     
     worker.start(QThread.Priority.LowPriority)
 
@@ -364,4 +505,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
