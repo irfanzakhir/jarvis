@@ -1,4 +1,4 @@
-```
+
 # ⚙️ J.A.R.V.I.S. OS // Next-Gen Desktop Agent
 
 ![Python Version](https://img.shields.io/badge/Python-3.11%2B-cyan?style=for-the-badge&logo=python)
