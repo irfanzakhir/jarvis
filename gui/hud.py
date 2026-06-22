@@ -115,7 +115,7 @@ class JarvisHUD(QMainWindow):
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
         settings.setAttribute(QWebEngineSettings.WebAttribute.ShowScrollBars, False)
         
-        self.dashboard.page().setBackgroundColor(QColor(5, 5, 8))
+        self.dashboard.page().setBackgroundColor(Qt.GlobalColor.transparent)
         
         dashboard_path = resource_path(os.path.join('assets', 'dashboard.html'))
         self.dashboard.loadFinished.connect(self.on_load_finished)
@@ -381,15 +381,12 @@ class JarvisHUD(QMainWindow):
         action = data.get('action')
         
         if log_text and ("USER" in log_text or "JARVIS" in log_text or "SYSTEM" in log_text or "[WARNING]" in log_text or "[CRITICAL]" in log_text):
-            safe_text = json.dumps(log_text) 
-            self.dashboard.page().runJavaScript(f"updateComms({safe_text});")
+            
             self.log_output.append(log_text)
             self.log_output.verticalScrollBar().setValue(self.log_output.verticalScrollBar().maximum())
             
-        if action == 'show_news':
-            safe_news = json.dumps(log_text)
-            self.dashboard.page().runJavaScript(f"activatePanel('news', {safe_news});")
-        elif action == 'update_wifi':
+        
+        if action == 'update_wifi':
             wifi_data = data.get('data', {})
             ssid = wifi_data.get("ssid", "OFFLINE")
             signal = wifi_data.get("signal", "--")
@@ -436,8 +433,10 @@ class JarvisHUD(QMainWindow):
         elif action == 'minimize_dashboard': self.minimize_to_orb()
         elif action == 'restore_dashboard': self.restore_from_orb()
 
+    # Add this inside the JarvisHUD class:
     def closeEvent(self, event):
-        if hasattr(self, 'dashboard'):
+        """Forces the Chromium WebEngine to drop its memory hooks instantly on close."""
+        if hasattr(self, 'dashboard') and self.dashboard:
+            self.dashboard.page().deleteLater()
             self.dashboard.setPage(None)
-            self.dashboard.deleteLater()
         event.accept()

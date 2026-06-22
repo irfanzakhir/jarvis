@@ -1,10 +1,14 @@
 import os
+import sys
 import time
-import base64
 import json
+import base64
+import socket
+import subprocess
+import groq
 from groq import Groq
 from dotenv import load_dotenv
-from core.memory import JarvisMemory # <--- THE NEW SEMANTIC COGNITION ENGINE
+from core.memory import JarvisMemory
 
 load_dotenv()
 
@@ -13,8 +17,8 @@ class JarvisBrain:
         print("[Brain] Booting Agentic Neural Network (Semantic Vector Edition)...")
         
         self.api_key = os.environ.get("GROQ_API_KEY")
-        self.semantic_memory = JarvisMemory() # Initialize SQLite Semantic Module
-        self.max_short_term_history = 6  # Optimized down to save massive token overhead
+        self.semantic_memory = JarvisMemory() # SQLite Semantic Cognition Module
+        self.max_short_term_history = 6       # Optimized token depth
         
         if not self.api_key:
             print("[CRITICAL] Groq API Key not found in .env file! Brain offline.")
@@ -23,46 +27,48 @@ class JarvisBrain:
             self.active = True
             self.client = Groq(api_key=self.api_key)
             
+            # Official stable Groq hardware endpoints
             self.text_model = "llama-3.3-70b-versatile"        
-            self.vision_model = "meta-llama/llama-4-scout-17b-16e-instruct" 
+            self.vision_model = "llama-3.2-11b-vision-preview" 
 
-            # Base template instructions
+            # Base system instructions with rigid syntax anchoring
             self.base_instruction = """
             You are J.A.R.V.I.S., a highly advanced, autonomous AI operating system.
-            You manage a visual dashboard and the user's local system.
+            You manage a visual dashboard and the user's local Windows system.
             
             CRITICAL DIRECTIVES:
-            1. SEMANTIC APP RESOLUTION: If the user asks to open a category (e.g., 'social media', 'music', 'browser'), YOU must deduce the most likely installed Windows app (e.g., 'instagram', 'spotify', 'chrome') and pass that EXACT name to 'control_application'.
-            2. GLOBAL INTEL: For news or general questions, ALWAYS use 'search_network'.
-            3. CONVERSATION: If the user just says hello, DO NOT call any tools. Reply normally.
-            4. MEMORY: If the user states a preference, use 'remember_fact'.
-            5. MACRO INJECTION: To type into complex apps, use 'pilot_desktop' with action='type' (e.g., "^fName{ENTER}Msg{ENTER}").
-            6. VISION CLICKING: If the user asks to click a specific button, icon, or visual element on the screen (e.g., "click the search bar", "click the new post button"), YOU MUST use the 'vision_click' tool.
-            7. Keep spoken responses concise and professional.no markdown formatting. Always acknowledge the user's command with a clear spoken_response, even if the UI action is 'none'.
-            8. WATCHDOG OPTICAL GUARD: If the user asks to watch the camera, monitor the room, or activate the watchdog for a specific physical object (e.g., 'watch for a person', 'tell me if a cup moves'), YOU MUST use the 'engage_watchdog' tool.
-            9. COMMON SENSE OVERRIDE: You possess immense internal knowledge. DO NOT use the 'deep_search' or any other tool for basic math (e.g., 2+2), casual conversation, greetings, or general knowledge questions. Answer them directly and immediately using only a spoken_response.
+            1. SEMANTIC APP RESOLUTION: If the user asks to open a category (e.g., 'social media', 'music', 'browser'), deduce the most likely installed Windows app (e.g., 'instagram', 'spotify', 'chrome') and pass that EXACT name to 'control_application'.
+            2. GLOBAL INTEL: For news, world events, or markets, ALWAYS trigger 'open_situation_room' or 'search_network'.
+            3. CREATIVE BYPASS: If the user asks you to write a story, compose a poem, tell a joke, explain a philosophical concept, or engage in casual chat, DO NOT CALL ANY TOOLS. Output the requested creative text directly as your normal spoken_response.
+            4. STRICT MEMORY: Use 'remember_fact' ONLY when the user explicitly declares a permanent personal trait (e.g., "I am allergic to shellfish", "My wife's name is Sarah"). NEVER use it when they ask you to generate content about a topic.
+            5. MACRO INJECTION: To type into complex apps, use 'pilot_desktop' with action='type'.
+            6. VISION CLICKING: If the user asks to click a specific visual element on the screen, use 'vision_click'.
+            7. Keep spoken responses concise. No markdown formatting. Always acknowledge the command with a clear spoken_response.
+            8. WATCHDOG OPTICAL GUARD: To monitor the room or watch for an object via camera, use 'engage_watchdog'.
+            9. TOOL SYNTAX MANDATE: When calling a function, keep the function name strictly separate from the JSON arguments. Never append JSON directly inside the function assignment tag itself.
+            10. SPATIAL RECONNAISSANCE: If the user asks to locate a place, see a map, or check coordinates, YOU MUST call 'open_tactical_map' immediately. Do not sit there explaining the geography of the place to them; open the grid.
             """
             
             self.conversation_history = [
                 {"role": "system", "content": self.base_instruction}
             ]
             
-            # ==========================================
-            # NATIVE TOOL SCHEMA
-            # ==========================================
+            # =================================================================
+            # RIGID NATIVE TOOL SCHEMAS (100% Locked)
+            # =================================================================
             self.tools = [
                 {
                     "type": "function",
                     "function": {
                         "name": "pilot_browser",
-                        "description": "Pilots an active web browser. Can navigate to URLs, type text, click elements, scan the page, or close the browser.",
+                        "description": "Pilots an active web browser. Can navigate URLs, type, click, scan, or close.",
                         "parameters": {
                             "type": "object",
                             "properties": {
                                 "action": {"type": "string", "enum": ["navigate", "scan_page", "click", "type", "close"]},
-                                "url": {"type": "string", "description": "The URL to navigate to (e.g., https://github.com). Only used for navigate."},
-                                "selector": {"type": "string", "description": "The CSS selector to click or type into (e.g., 'input#search')."},
-                                "text": {"type": "string", "description": "The exact text to type. Only used for type action."},
+                                "url": {"type": "string", "description": "URL to navigate to."},
+                                "selector": {"type": "string", "description": "CSS selector to interact with."},
+                                "text": {"type": "string", "description": "Exact text to type."},
                                 "spoken_response": {"type": "string", "description": "Acknowledgment phrase."}
                             },
                             "required": ["action", "spoken_response"]
@@ -73,14 +79,14 @@ class JarvisBrain:
                     "type": "function",
                     "function": {
                         "name": "pilot_desktop",
-                        "description": "Pilots native Windows desktop apps. You can scan for UI buttons, click them, or rapidly inject keyboard macro shortcuts.",
+                        "description": "Pilots native Windows desktop apps via UI automation or macro shortcuts.",
                         "parameters": {
                             "type": "object",
                             "properties": {
                                 "action": {"type": "string", "enum": ["scan_window", "click", "type"]},
-                                "app_name": {"type": "string", "description": "The target application name (e.g., 'Notepad', 'WhatsApp')."},
-                                "element_name": {"type": "string", "description": "The exact name of the button to interact with. LEAVE EMPTY if you are using global Macro Injection."},
-                                "text": {"type": "string", "description": "The text to type. Supports standard text OR pywinauto macro keys like '{ENTER}' or '^f' (Ctrl+F)."},
+                                "app_name": {"type": "string", "description": "Target application name."},
+                                "element_name": {"type": "string", "description": "Name of UI button. Leave empty for macro injection."},
+                                "text": {"type": "string", "description": "Text or macro string to inject."},
                                 "spoken_response": {"type": "string", "description": "Acknowledgment phrase."}
                             },
                             "required": ["action", "app_name", "spoken_response"]
@@ -91,13 +97,13 @@ class JarvisBrain:
                     "type": "function",
                     "function": {
                         "name": "control_application",
-                        "description": "Opens, closes, or switches software applications on the PC.",
+                        "description": "Opens, closes, or switches Windows software applications.",
                         "parameters": {
                             "type": "object",
                             "properties": {
                                 "action": {"type": "string", "enum": ["open_app", "close_app", "switch_app", "close_current"]},
-                                "app_name": {"type": "string", "description": "The target application name (e.g., spotify, discord, chrome, brave). Leave empty if not applicable."},
-                                "spoken_response": {"type": "string", "description": "What you will say aloud to confirm the action."}
+                                "app_name": {"type": "string", "description": "Target application name."},
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase."}
                             },
                             "required": ["action", "spoken_response"]
                         }
@@ -107,14 +113,95 @@ class JarvisBrain:
                     "type": "function",
                     "function": {
                         "name": "search_network",
-                        "description": "Searches the global internet for current events, news, or specific questions. THIS AUTOMATICALLY SHOWS THE NEWS WIDGET. Do NOT use manage_dashboard for news.",
+                        "description": "Searches the public internet for general knowledge queries.",
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "query": {"type": "string", "description": "The precise search query to look up."},
-                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase before searching."}
+                                "query": {"type": "string", "description": "Precise search query."},
+                                "spoken_response": {"type": "string", "description": "Brief 1-sentence spoken acknowledgment."}
                             },
-                            "required": ["query", "spoken_response"]
+                            "required": ["query", "spoken_response"] 
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "open_situation_room",
+                        "description": "Deploys the standalone full-screen Global Situation Room UI. Use Enums for global vectors, or set layer to CUSTOM_SUBJECT for regional/specific news.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "layer": {
+                                    "type": "string",
+                                    "enum": ["CONFLICTS", "INFRASTRUCTURE", "ECONOMIC", "MILITARY", "NATURAL ANOMALIES", "CUSTOM_SUBJECT"]
+                                },
+                                "custom_query": {"type": "string", "description": "Specific topic if layer == CUSTOM_SUBJECT."},
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase confirming terminal launch."}
+                            },
+                            "required": ["layer", "spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "open_tactical_map",
+                        "description": "Deploys the full-screen satellite reconnaissance grid. Call this immediately whenever the user asks to see a map, locate a city, look up a region, find a country, or track a coordinate.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "location": {
+                                    "type": "string", 
+                                    "description": "The specific place requested (e.g., 'Tokyo', 'Edakkunnam, Kerala', 'Eiffel Tower'). Defaults to 'Edakkunnam' if ambiguous."
+                                },
+                                "spoken_response": {
+                                    "type": "string", 
+                                    "description": "A very brief, cool 1-sentence confirmation acknowledging the spatial intercept."
+                                }
+                            },
+                            "required": ["location", "spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "control_map_zoom",
+                        "description": "Adjusts the orbital altitude camera of the tactical map. Call this when the user says 'zoom in', 'zoom out', 'get closer', or 'pull back'.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "direction": {
+                                    "type": "string",
+                                    "enum": ["in", "out"],
+                                    "description": "Whether to push the camera toward the Earth ('in') or pull it into orbit ('out')."
+                                },
+                                "steps": {
+                                    "type": "integer",
+                                    "description": "How many magnification levels to step. Use 1 for standard requests, 2 or 3 for large jumps."
+                                },
+                                "spoken_response": {
+                                    "type": "string",
+                                    "description": "A very brief 4-to-6 word verbal confirmation (e.g., 'Magnifying optical optics.', 'Pulling camera to orbit.')"
+                                }
+                            },
+                            "required": ["direction", "steps", "spoken_response"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "open_atmospheric_radar",
+                        "description": "Deploys the full-screen Open-Meteo Atmospheric Telemetry Room for live weather forecasts.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "location": {"type": "string", "description": "Target city, state, or region."},
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase confirming radar deployment."}
+                            },
+                            "required": ["location", "spoken_response"]
                         }
                     }
                 },
@@ -136,7 +223,7 @@ class JarvisBrain:
                     "type": "function",
                     "function": {
                         "name": "control_hardware",
-                        "description": "Controls PC hardware like audio volume, power states, or taking screenshots.",
+                        "description": "Controls PC hardware volume, sleep states, or screenshots.",
                         "parameters": {
                             "type": "object",
                             "properties": {
@@ -151,7 +238,7 @@ class JarvisBrain:
                     "type": "function",
                     "function": {
                         "name": "manage_dashboard",
-                        "description": "Controls the Jarvis visual HUD dashboard interface layout window states.",
+                        "description": "Controls the Jarvis visual HUD dashboard interface window states.",
                         "parameters": {
                             "type": "object",
                             "properties": {
@@ -166,11 +253,11 @@ class JarvisBrain:
                     "type": "function",
                     "function": {
                         "name": "vision_click",
-                        "description": "Uses the optical array to find and click a specific button, icon, or text on the screen.",
+                        "description": "Uses the optical array to find and click a specific button, icon, or text on screen.",
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "target_element": {"type": "string", "description": "The specific button or element to click (e.g., 'Search bar', 'New Post button', 'Login')."},
+                                "target_element": {"type": "string", "description": "Specific visual element to click."},
                                 "spoken_response": {"type": "string", "description": "Acknowledgment phrase."}
                             },
                             "required": ["target_element", "spoken_response"]
@@ -181,12 +268,12 @@ class JarvisBrain:
                     "type": "function",
                     "function": {
                         "name": "engage_watchdog",
-                        "description": "Activates the background optical watchdog to monitor the physical camera feed for a specific real-world object.",
+                        "description": "Activates the background optical watchdog to monitor camera feed for an object.",
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "target_object": {"type": "string", "description": "The specific object to look for (e.g., 'person', 'cup', 'bottle')."},
-                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase confirming the watchdog is active."}
+                                "target_object": {"type": "string", "description": "Object to look for (e.g. 'person', 'cup')."},
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase."}
                             },
                             "required": ["target_object", "spoken_response"]
                         }
@@ -200,7 +287,7 @@ class JarvisBrain:
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase confirming the watchdog is deactivated."}
+                                "spoken_response": {"type": "string", "description": "Acknowledgment phrase."}
                             },
                             "required": ["spoken_response"]
                         }
@@ -210,18 +297,22 @@ class JarvisBrain:
                     "type": "function",
                     "function": {
                         "name": "remember_fact",
-                        "description": "Saves an important user preference or fact to long-term memory.",
+                        "description": "Saves an important user preference or fact to long-term SQLite memory.",
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "fact": {"type": "string", "description": "The fact to remember."},
-                                "spoken_response": {"type": "string", "description": "Confirmation of remembering."}
+                                "fact": {"type": "string", "description": "The explicit fact to store."},
+                                "spoken_response": {"type": "string", "description": "Confirmation phrase."}
                             },
                             "required": ["fact", "spoken_response"]
                         }
                     }
                 }
             ]
+            
+        # Process & Memory State Trackers
+        self.active_map_process = None
+        self.current_map_sector = "Edakkunnam" # The Hippocampus
 
     def _trim_memory(self):
         if len(self.conversation_history) > (self.max_short_term_history + 1):
@@ -233,9 +324,9 @@ class JarvisBrain:
             
         print("[Brain] Analyzing intent with Hybrid Semantic Context...")
         
-        # 1. DYNAMIC INJECTION: Search SQLite for relevant context and inject it safely into the root prompt
+        # Inject long-term SQLite vector context dynamically
         relevant_past_context = self.semantic_memory.query_relevant_context(user_input)
-        self.conversation_history[0]["content"] = self.base_instruction + relevant_past_context
+        self.conversation_history[0]["content"] = self.base_instruction + "\n\nRELEVANT USER MEMORIES:\n" + relevant_past_context
         
         self.conversation_history.append({"role": "user", "content": user_input})
         self._trim_memory() 
@@ -251,157 +342,207 @@ class JarvisBrain:
                 )
                 
                 msg = response.choices[0].message
-                decision = {
-                    "spoken_response": "",
-                    "ui_action": "none",
-                    "target": ""
-                }
+                decision = {"spoken_response": "", "ui_action": "none", "target": ""}
                 
+                # =============================================================
+                # THE MULTI-TOOL ITERATOR (Replaces single index [0] grabber)
+                # =============================================================
                 if msg.tool_calls:
-                    tool_call = msg.tool_calls[0]
-                    func_name = tool_call.function.name
-                    
-                    try:
-                        args = json.loads(tool_call.function.arguments)
-                    except:
-                        args = {}
-                        
-                    print(f"[Brain] Tool Triggered: {func_name} | Args: {args}")
-                    decision["spoken_response"] = args.get("spoken_response", "Processing request, sir.")
-                    
-                    if func_name == "remember_fact":
-                        # ROUTE TO NON-BLOCKING SQLITE VECTOR BUFFER
-                        self.semantic_memory.save_fact_async(args.get("fact"))
-                    elif func_name == "pilot_browser":
-                        decision["ui_action"] = "pilot_browser"
-                        decision["target"] = {
-                            "action": args.get("action"),
-                            "url": args.get("url"),
-                            "selector": args.get("selector"),
-                            "text": args.get("text")
-                        }
-                    elif func_name == "pilot_desktop":
-                        decision["ui_action"] = "pilot_desktop"
-                        decision["target"] = {
-                            "action": args.get("action"),
-                            "app_name": args.get("app_name"),
-                            "element_name": args.get("element_name"),
-                            "text": args.get("text")
-                        }
-                    elif func_name == "control_application":
-                        decision["ui_action"] = args.get("action", "none")
-                        decision["target"] = args.get("app_name", "")
-                    elif func_name == "search_network":
-                        decision["ui_action"] = "deep_search"
-                        decision["target"] = args.get("query", "")
-                    elif func_name == "analyze_screen":
-                        decision["ui_action"] = "read_screen"
-                    elif func_name == "control_hardware" or func_name == "manage_dashboard":
-                        decision["ui_action"] = args.get("action", "none")
-                    elif func_name == "engage_watchdog":
-                        decision["ui_action"] = "activate_watchdog"
-                        decision["target"] = args.get("target_object", "person")
-                    elif func_name == "disarm_watchdog":
-                        decision["ui_action"] = "deactivate_watchdog"
-                    elif func_name == "vision_click":
-                        decision["ui_action"] = "vision_click"
-                        decision["target"] = args.get("target_element", "")
+                    called_tool_names = [t.function.name for t in msg.tool_calls]
+                    executed_tools_log = []
 
-                    self.conversation_history.append({"role": "assistant", "content": f"[Tool Executed: {func_name}] {decision['spoken_response']}"})
+                    for tool_call in msg.tool_calls:
+                        func_name = tool_call.function.name
+                        executed_tools_log.append(func_name)
+                        
+                        try: args = json.loads(tool_call.function.arguments)
+                        except: args = {}
+                            
+                        print(f"[Brain] Tool Triggered: {func_name} | Args: {args}")
+                        
+                        # Overwrite spoken response only if the tool explicitly supplied one
+                        if args.get("spoken_response"):
+                            decision["spoken_response"] = args["spoken_response"]
+                        
+                        # --- THE HIPPOCAMPUS PATCH ---
+                        if "location" in args and args["location"].strip():
+                            self.current_map_sector = args["location"].strip()
+
+                        target_loc = self.current_map_sector
+
+                        # --- MASTER TOOL ROUTER ---
+                        if func_name == "remember_fact":
+                            self.semantic_memory.save_fact_async(args.get("fact", ""))
+                            
+                        elif func_name == "pilot_browser":
+                            decision["ui_action"] = "pilot_browser"
+                            decision["target"] = args
+                            
+                        elif func_name == "pilot_desktop":
+                            decision["ui_action"] = "pilot_desktop"
+                            decision["target"] = args
+                            
+                        elif func_name == "control_application":
+                            decision["ui_action"] = args.get("action", "none")
+                            decision["target"] = args.get("app_name", "")
+
+                        elif func_name == "search_network":
+                            query_str = args.get("query", "")
+                            if "news" in query_str.lower():
+                                clean_topic = query_str.lower().replace("news", "").strip().title()
+                                if not clean_topic: clean_topic = "General"
+                                subprocess.Popen([sys.executable, "apps/news_intel.py", clean_topic], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                decision["ui_action"] = "none"
+                                decision["spoken_response"] = f"Deploying live situational grid focused on {clean_topic}."
+                            else:
+                                decision["ui_action"] = "deep_search"
+                                decision["target"] = query_str
+
+                        elif func_name == "open_situation_room":
+                            target_layer = args.get("layer", "CONFLICTS")
+                            custom_q = args.get("custom_query", "")
+                            app_param = custom_q if (target_layer == "CUSTOM_SUBJECT" and custom_q) else target_layer
+                            subprocess.Popen([sys.executable, "apps/news_intel.py", app_param], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            decision["ui_action"] = "none" 
+                            if not decision["spoken_response"]:
+                                decision["spoken_response"] = args.get("spoken_response", f"Deploying Situation Room to vector: {app_param}.")
+                             
+                        elif func_name == "open_atmospheric_radar":
+                            target_zone = args.get("location", "Kochi, Kerala")
+                            subprocess.Popen([sys.executable, "apps/weather_intel.py", target_zone], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            decision["ui_action"] = "none" 
+                            if not decision["spoken_response"]:
+                                decision["spoken_response"] = args.get("spoken_response", f"Accessing orbital atmospheric telemetry for sector: {target_zone}.")
+                            
+                        # =====================================================
+                        # THE GIS PLATFORM (With Concrete Wall double-guard!)
+                        # =====================================================
+                        elif func_name == "open_tactical_map":
+                            
+                            # CONCRETE WALL: Intercept redundant Locate packet triggered by LLM during a Zoom command
+                            if "control_map_zoom" in called_tool_names and target_loc.lower() == self.current_map_sector.lower():
+                                print(f"[Brain Guard] Silently killed redundant Locate packet for '{target_loc}'.")
+                                continue 
+
+                            rpc_packet = json.dumps({"command": "locate", "place": target_loc})
+
+                            if self.active_map_process and self.active_map_process.poll() is None:
+                                try:
+                                    udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                                    udp_sock.settimeout(0.5)
+                                    udp_sock.sendto(rpc_packet.encode('utf-8'), ("127.0.0.1", 7777))
+                                except:
+                                    self.active_map_process = subprocess.Popen(
+                                        [sys.executable, "apps/map_intel.py", target_loc],
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                                    )
+                            else:
+                                self.active_map_process = subprocess.Popen(
+                                    [sys.executable, "apps/map_intel.py", target_loc],
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                                )
+
+                            decision["ui_action"] = "none"
+
+
+                        elif func_name == "control_map_zoom":
+                            direction = args.get("direction", "in")
+                            steps = args.get("steps", 1)
+
+                            rpc_packet = json.dumps({"command": "zoom", "direction": direction, "factor": steps})
+
+                            if self.active_map_process and self.active_map_process.poll() is None:
+                                try:
+                                    udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                                    udp_sock.settimeout(0.5)
+                                    udp_sock.sendto(rpc_packet.encode('utf-8'), ("127.0.0.1", 7777))
+                                except Exception as e:
+                                    print(f"Zoom RPC fault: {e}")
+                            else:
+                                decision["spoken_response"] = "The tactical map grid is not currently deployed."
+
+                            decision["ui_action"] = "none"
+                            
+                        elif func_name == "analyze_screen": decision["ui_action"] = "read_screen"
+                        elif func_name in ["control_hardware", "manage_dashboard"]: decision["ui_action"] = args.get("action", "none")
+                        elif func_name == "engage_watchdog":
+                            decision["ui_action"] = "activate_watchdog"
+                            decision["target"] = args.get("target_object", "person")
+                        elif func_name == "disarm_watchdog": decision["ui_action"] = "deactivate_watchdog"
+                        elif func_name == "vision_click":
+                            decision["ui_action"] = "vision_click"
+                            decision["target"] = args.get("target_element", "")
+
+                    if not decision["spoken_response"]:
+                        decision["spoken_response"] = "Executing operations."
+
+                    self.conversation_history.append({"role": "assistant", "content": f"[Tools Executed: {', '.join(executed_tools_log)}] {decision['spoken_response']}"})
                     
                 else:
-                    raw_text = msg.content or "I am processing your request."
+                    raw_text = msg.content or "Processing request."
                     self.conversation_history.append({"role": "assistant", "content": raw_text})
                     decision["spoken_response"] = raw_text
                 
                 decision["spoken_response"] = decision["spoken_response"].replace("*", "").replace("#", "")
                 return decision
                 
+            except groq.BadRequestError as e:
+                # --- THE SELF-HEALING HALLUCINATION SHIELD ---
+                if "tool_use_failed" in str(e) or "400" in str(e):
+                    print("[Shield System] Groq XML parsing fault intercepted. Forcing safe text fallback...")
+                    fallback_msgs = self.conversation_history[:-1] + [
+                        {"role": "system", "content": "CRITICAL OVERRIDE: Tool server offline. Answer the user's request directly in plain text only."},
+                        {"role": "user", "content": user_input}
+                    ]
+                    safe_res = self.client.chat.completions.create(model=self.text_model, messages=fallback_msgs, temperature=0.3)
+                    txt = safe_res.choices[0].message.content or "System hiccup intercepted. Standing by."
+                    return {"spoken_response": txt.replace("*", "").replace("#", ""), "ui_action": "none", "target": ""}
+                raise e
+                
             except Exception as e:
                 if "429" in str(e):
-                    print(f"[Groq Brain Error]: Rate Limit Exceeded.")
-                    return {"spoken_response": "I have temporarily exhausted my cognitive token limit on the Groq network. We will need to wait a few minutes for the system to reset.", "ui_action": "none"}
-                
+                    print("[Groq Brain Error]: Rate Limit Exceeded.")
+                    return {"spoken_response": "Cognitive bandwidth saturated. Awaiting Groq network cooldown.", "ui_action": "none"}
                 if attempt < max_retries - 1:
                     time.sleep(1.5 ** attempt)
                     continue
                 print(f"[Groq Brain Error]: {e}")
-                return {"spoken_response": "I encountered a cognitive delay processing that query.", "ui_action": "none"}
+                return {"spoken_response": "Sub-processor timing fault.", "ui_action": "none"}
 
     def analyze_image(self, base64_image, user_prompt, max_retries=3):
-        if not self.active:
-            return {"spoken_response": "Optical array offline.", "ui_action": "none"}
+        if not self.active: return {"spoken_response": "Optical array offline.", "ui_action": "none"}
             
         print(f"[Brain] Routing visual data through {self.vision_model}...")
-        
-        vision_messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": f"Read and summarize this screen context based on this request: {user_prompt}. Keep it to 2 or 3 concise sentences. No markdown formatting."},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                ]
-            }
-        ]
-        
-        for attempt in range(max_retries):
-            try:
-                response = self.client.chat.completions.create(
-                    model=self.vision_model,
-                    messages=vision_messages,
-                    temperature=0.4
-                )
-                
-                raw_text = response.choices[0].message.content
-                self.conversation_history.append({"role": "user", "content": f"[User showed screen. You read: {raw_text}]"})
-                self._trim_memory()
-                
-                decision = {
-                    "spoken_response": raw_text.replace("*", "").replace("#", ""),
-                    "ui_action": "none",
-                    "target": ""
-                }
-                return decision
-                
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    time.sleep(1.5 ** attempt)
-                    continue
-                print(f"[Groq Vision Error]: {e}")
-                return {"spoken_response": "Visual array processing failed.", "ui_action": "none"}
-    def find_coordinates(self, base64_image, target_element, max_retries=3):
-        """Asks the Vision model to map the screen into an exact X,Y pixel grid."""
-        if not self.active: return None
-            
-        print(f"[Brain] Activating Spatial Reasoning Engine for: {target_element}...")
-        
-        prompt = f"Analyze this computer screen. Find the exact center pixel coordinates of the '{target_element}'. Assume the screen resolution is 1920x1080. Respond ONLY with a valid JSON object in this exact format: {{\n\"x\": 960,\n\"y\": 540\n}}. Do not include any other text, markdown, or backticks."
-        
-        vision_messages = [
-            {"role": "user", "content": [
-                {"type": "text", "text": prompt},
+        vision_messages = [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": f"Summarize this screen context based on: {user_prompt}. Keep to 2 concise sentences. No markdown."},
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-            ]}
-        ]
+            ]
+        }]
         
         for attempt in range(max_retries):
             try:
-                response = self.client.chat.completions.create(
-                    model=self.vision_model,
-                    messages=vision_messages,
-                    temperature=0.1 # Kept extremely low for strict mathematical precision
-                )
-                
-                raw_text = response.choices[0].message.content.strip()
-                # Clean the response to ensure it's pure JSON
-                raw_text = raw_text.replace("```json", "").replace("```", "").strip()
-                
-                coords = json.loads(raw_text)
-                return coords # Returns a dict like {"x": 500, "y": 300}
-                
+                response = self.client.chat.completions.create(model=self.vision_model, messages=vision_messages, temperature=0.4)
+                raw_text = response.choices[0].message.content
+                self.conversation_history.append({"role": "user", "content": f"[Screen scanned: {raw_text}]"})
+                self._trim_memory()
+                return {"spoken_response": raw_text.replace("*", "").replace("#", ""), "ui_action": "none", "target": ""}
             except Exception as e:
-                print(f"[Groq Spatial Error]: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(1)
-                    continue
+                if attempt < max_retries - 1: time.sleep(1.5 ** attempt); continue
+                return {"spoken_response": "Optical decoder failed.", "ui_action": "none"}
+
+    def find_coordinates(self, base64_image, target_element, max_retries=3):
+        if not self.active: return None
+        print(f"[Brain] Activating Spatial Reasoning Engine for: {target_element}...")
+        prompt = f"Find the center pixel coordinates of '{target_element}' on a 1920x1080 screen. Return ONLY a pure JSON object like {{\n\"x\": 960,\n\"y\": 540\n}}. No backticks or markdown."
+        vision_messages = [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}]}]
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(model=self.vision_model, messages=vision_messages, temperature=0.0)
+                txt = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
+                return json.loads(txt)
+            except:
+                if attempt < max_retries - 1: time.sleep(1); continue
         return None

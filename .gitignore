@@ -33,3 +33,26 @@ memory.db
 *.log
 __pycache__/
 venv/
+
+# Environments
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# Security & API Keys (CRITICAL)
+.env
+*.pem
+*.key
+
+# Jarvis Autonomous Caches & Telemetry
+*.json
+news_matrix_cache.json
+openmeteo_atmospheric_cache.json
+
+# User Long-Term Memory (Do not leak your personal life to GitHub!)
+*.db
+*.sqlite
+*.sqlite3
+jarvis_cognition.db

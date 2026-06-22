@@ -1,3 +1,8 @@
+import os
+# Tells Google's C++ logger: "Only print FATAL system crashes, shut up about everything else."
+os.environ["GLOG_minloglevel"] = "2"  
+os.environ["MP_SILENT_LOGS"] = "1"
+import subprocess
 import sys
 import time
 import keyboard
@@ -217,11 +222,26 @@ class JarvisWorker(QThread):
                 time.sleep(0.1)
             else:
                 time.sleep(0.5)
+    
             
     def set_mute_state(self, is_muted):
         self.is_mic_muted = is_muted
         state_log = "[SYSTEM]: AUDIO PIPELINE MUTED" if is_muted else "[SYSTEM]: AUDIO PIPELINE ACTIVE"
         self.status_signal.emit({"log": state_log})
+        
+    def launch_intel_matrix(voice_command):
+        layer = "CONFLICTS" # default fallback
+        
+        if "infrastructure" in voice_command or "outage" in voice_command:
+            layer = "INFRASTRUCTURE"
+        elif "market" in voice_command or "stock" in voice_command:
+            layer = "ECONOMIC"
+        elif "military" in voice_command or "defense" in voice_command:
+            layer = "MILITARY"
+        elif "weather" in voice_command or "natural disaster" in voice_command:
+            layer = "NATURAL ANOMALIES"
+        
+        subprocess.Popen(["python", "apps/news_intel.py", layer])
 
     def handle_system_alert(self, msg):
         if isinstance(msg, dict):
