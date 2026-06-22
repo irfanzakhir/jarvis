@@ -27,7 +27,9 @@ jarvis_git/
 │   ├── eyes.py                  # Vision pipeline & Llama 4 Scout stream
 │   └── monitor.py               # Hardware telemetry polling & background daemons
 ├── apps/
-│   └── map_intel.py             # Spatial Intelligence Suite (PyQt6 + Leaflet JS)
+│   ├── map_intel.py             # Spatial Intelligence Suite (PyQt6 + Leaflet JS)
+│   ├── news_intel.py            # Global Situation Room Matrix
+│   └── weather_intel.py         # Atmospheric Open-Meteo Radar
 ├── gui/
 │   └── hud.py                   # Frameless DWM-bypassing holographic layout
 └── utils/
@@ -42,31 +44,48 @@ jarvis_git/
 ### 1. The Neural Core (`core/brain.py`)
 
 * **Speed Engine:** Utilizes the Groq SDK to run **Llama 3.3 70B** at hundreds of tokens per second.
-* **Sliding Window Memory:** Implements a strict, self-trimming context window (saving the last 10 interactions) to maintain perfect conversational awareness without ever hitting token overflow limits.
-* **Persistent Storage:** Asynchronously writes critical user facts to a local JSON memory drive for long-term recall.
+* **Sliding Window Memory:** Implements a strict, self-trimming context window (saving the last 10 interactions) to maintain perfect conversational awareness without hitting token overflow limits.
+* **Persistent Cognition:** Implements a long-term SQLite semantic database (`JarvisMemory`) to asynchronously save critical user facts, retrieving context dynamically via vector math.
 
 ### 2. The Optical Array (`core/eyes.py`)
 
 * **Vision Pipeline:** Captures base64-encoded screen states and webcam feeds.
-* **Multimodal Analysis:** Routes image data through Meta's **Llama 4 Scout** model, cross-wiring visual findings directly back into the primary text memory stream.
+* **Multimodal Analysis:** Routes image data through Meta's **Llama 3.2 11B Vision** model, cross-wiring visual findings directly back into the primary text memory stream.
 
 ### 3. The Autonomic Nervous System (`core/monitor.py` & `utils/automation.py`)
 
 * **Live Telemetry:** Background daemon threads continuously poll `psutil` and Windows network configurations to track CPU loads, physical RAM allocation, and real-time network bandwidth.
 * **Threat Detection:** Automatically interrupts the AI's standard loop to verbally warn the user if network uplinks drop or hardware thresholds exceed 90%.
-* **PC Automation:** Grants the AI execution rights to manipulate the host machine via `pyautogui` and `os` commands (Launch IDEs, adjust audio gain, take screenshots, or force hibernation).
+* **PC Automation:** Grants the AI execution rights to manipulate the host machine via `pyautogui` and `os` commands (Launch software, adjust audio gain, take screenshots, or force sleep states).
 
 ### 4. The Holographic HUD (`gui/hud.py`)
 
-* **DWM Bypass:** Uses Qt window flags (`SplashScreen | FramelessWindowHint`) to completely strip Windows 11 borders, creating a genuine floating interface.
-* **WebEngine Dashboard:** Renders an animated, high-performance HTML/CSS/JS dashboard that catches live JSON telemetry signals from the Python backend.
+* **DWM Bypass:** Uses Qt window flags (`SplashScreen | FramelessWindowHint`) to strip Windows 11 borders, creating a genuine floating interface.
+* **WebEngine Dashboard:** Renders an animated HTML/CSS/JS dashboard that catches live JSON telemetry signals from the Python backend.
 
-### 5. Spatial Intelligence Module (`apps/map_intel.py`)
+---
 
-* **The Single-Process Chromium Diet:** Overrides default multi-threaded Qt allocations via system environment modifications (`--single-process`), dropping background RAM usage by up to 70% while silencing raw console debugging dumps.
-* **The Altitude Matrix:** Translates Esri location taxonomy metadata (`PointAddress`, `Neighborhood`, `Locality`, `City`, `State`) directly into optimized Leaflet orbital zoom indexes.
-* **The 1.5km Flight Guard:** Measures spatial delta between current position coordinates and new targets; prevents automated overrides from steamrolling custom manual zoom refinements if coordinates are within a tight $1.5\text{ km}$ threshold.
-* **Two-Way Click Refinement:** Manual viewport coordinate selections pipe telemetry upward back into the UI HUD through intercepted JavaScript page title mutations.
+## 🛠️ Autonomous Tool Roster (15 Native Directives)
+
+J.A.R.V.I.S. is equipped with 15 rigid tool schemas governed by a concrete multi-tool execution router. Here is the complete operational roster:
+
+| Tool Directive | Internal JSON Parameters | Spoken Trigger Example |
+| --- | --- | --- |
+| **`pilot_browser`** | `action`, `url`, `selector`, `text` | *"Open Chrome and navigate to github.com"* |
+| **`pilot_desktop`** | `action`, `app_name`, `element_name`, `text` | *"Type 'git push' into my terminal window"* |
+| **`control_application`** | `action`, `app_name` | *"Switch over to Spotify"* or *"Close Photoshop"* |
+| **`search_network`** | `query` | *"Search the web for the speed of light"* |
+| **`open_situation_room`** | `layer`, `custom_query` | *"Bring up the global conflict matrix"* |
+| **`open_tactical_map`** | `location` | *"Deploy tactical map grid onto Tokyo"* |
+| **`control_map_zoom`** | `direction`, `steps` | *"Zoom in two levels closer"* or *"Pull back to orbit"* |
+| **`open_atmospheric_radar`** | `location` | *"Check orbital atmospheric radar for Miami"* |
+| **`analyze_screen`** | *(None - Captures Base64)* | *"Scan my screen and tell me what this error means"* |
+| **`vision_click`** | `target_element` | *"Look at my screen and click the green 'Submit' button"* |
+| **`engage_watchdog`** | `target_object` | *"Engage optical watchdog and look for a coffee cup"* |
+| **`disarm_watchdog`** | *(None)* | *"Disarm the background optical watchdog"* |
+| **`control_hardware`** | `action` (`vol_up`, `mute`, `sleep`, etc.) | *"Mute system audio"* or *"Take a screenshot"* |
+| **`manage_dashboard`** | `action` (`minimize`, `combat_on`, etc.) | *"Minimize HUD dashboard"* or *"Engage combat mode"* |
+| **`remember_fact`** | `fact` | *"Remember that my primary coding language is Python"* |
 
 ---
 
@@ -124,7 +143,7 @@ python main.py
 
 ## 📻 Inter-Process Telemetry Tutorial (UDP JSON-RPC)
 
-The Spatial Intelligence app runs an active internal radio station on **UDP Port 7777**. Any script, background terminal, or automated voice engine can instantly snap the map's focus, alter coordinates, or trigger orbital adjustments by firing non-blocking network datagrams.
+The Spatial Intelligence app (`apps/map_intel.py`) runs an active internal radio station on **UDP Port 7777**. Any script, background terminal, or automated voice engine can instantly snap the map's focus, alter coordinates, or trigger orbital adjustments by firing non-blocking network datagrams.
 
 ### Map Telemetry Interface Specification
 
@@ -132,7 +151,7 @@ The app accepts standardized JSON-RPC envelopes containing a `command` parameter
 
 #### A. Fly to Location (`locate`)
 
-Moves the lens to a specific geographic region with automated fallback layers.
+Moves the lens to a specific geographic region with automated Esri fallback layers.
 
 ```json
 {
@@ -188,7 +207,7 @@ pyinstaller --noconfirm --windowed --add-data "assets;assets" --hidden-import="p
 
 ```
 
-> ⚠️ **Post-Compilation Directive:** After compilation completes, you must manually copy your local security `.env` file directly into the newly generated `dist/main/` folder immediately adjacent to the generated `main.exe` binary.
+> ⚠️ **Post-Compilation Directive:** After compilation completes, you must manually copy your local security `.env` file directly into the newly generated `dist/main/` folder immediately adjacent to the `main.exe` binary.
 
 ---
 
@@ -196,7 +215,7 @@ pyinstaller --noconfirm --windowed --add-data "assets;assets" --hidden-import="p
 
 This project is licensed under the **GNU License**.
 
-**Security Warning:** This software bridges a generative AI model with local machine execution protocols (closing applications, reading clipboard data, adjusting power states). It is strictly designed for developer research and local experimentation. Always verify safety constraints in the execution chains inside `utils/automation.py` before deploying wide-permission access keys.
+**Security Warning:** This software bridges a generative AI model with local machine execution protocols (closing applications, reading clipboard data, altering power states). It is strictly designed for developer research and local experimentation. Always verify safety constraints in the execution chains inside `utils/automation.py` before deploying wide-permission access keys.
 
 ```
 
