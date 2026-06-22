@@ -1,5 +1,4 @@
-
-# ⚙️ J.A.R.V.I.S. OS // Next-Gen Desktop Agent
+# ⚙️ J.A.R.V.I.S. OS // Next-Gen Autonomous Desktop Agent
 
 ![Python Version](https://img.shields.io/badge/Python-3.11%2B-cyan?style=for-the-badge&logo=python)
 ![Groq Engine](https://img.shields.io/badge/Powered_by-Groq_LPU-f37021?style=for-the-badge)
@@ -8,130 +7,144 @@
 
 > *"Just a rather very intelligent system."*
 
-**J.A.R.V.I.S. OS** is a custom-built, fully autonomous AI overlay for Windows. It moves beyond standard text-based chatbots by wiring a state-of-the-art Large Language Model directly into the local operating system. 
+**J.A.R.V.I.S. OS** is a custom-built, fully autonomous AI overlay for Windows 11. It moves beyond standard text-based chatbots by wiring a state-of-the-art Large Language Model directly into the local operating system's autonomic nervous system. 
 
-By running on **Groq's LPU inference hardware**, the system achieves near-instantaneous cognition, allowing it to process voice commands, analyze on-screen visual data, monitor hardware telemetry, and execute physical machine automation with zero perceived latency.
+By executing inference on **Groq's LPU hardware architecture**, the system processes high-speed vocal commands, executes multimodal visual screen comprehension, tracks local machine telemetry, and dispatches physical UI macro automation with zero perceived latency.
 
 ---
 
-## 📂 Project Repository Architecture
+## 📂 Exhaustive System Architecture
 
 ```text
-jarvis_git/
-├── .env                         # Critical security keys (Local deployment only)
-├── .gitignore                   # Class-4 environment containment rules
-├── requirements.txt             # Cross-platform production pip dependencies
-├── main.py                      # Main tactical orchestration engine
-├── core/
-│   ├── brain.py                 # Llama-3 neural core & memory managers
-│   ├── eyes.py                  # Vision pipeline & Llama 4 Scout stream
-│   └── monitor.py               # Hardware telemetry polling & background daemons
-├── apps/
-│   ├── map_intel.py             # Spatial Intelligence Suite (PyQt6 + Leaflet JS)
-│   ├── news_intel.py            # Global Situation Room Matrix
-│   └── weather_intel.py         # Atmospheric Open-Meteo Radar
-├── gui/
-│   └── hud.py                   # Frameless DWM-bypassing holographic layout
-└── utils/
-    └── automation.py            # Local OS execution chains (pyautogui/os hooks)
+JARVIS2.0/
+├── apps/                        # Standalone Situational & Reconnaissance Cockpits
+│   ├── map_intel.py             # GIS Tactical Navigation Grid (PyQt6 + Leaflet JS + UDP RPC)
+│   ├── news_intel.py            # Global Situation Room (Asynchronous Reflowing News Matrix)
+│   └── weather_intel.py         # Orbital Atmospheric Telemetry & Open-Meteo Radar
+├── assets/                      # Bundled Media & Hardware Textures
+│   └── sound_effects/           # UI auditory feedback chirps & radar sweeps
+├── build/                       # Temporary PyInstaller compilation staging artifacts
+├── core/                        # Autonomic Cognitive Core & Local Daemons
+│   ├── __pycache__/
+│   ├── brain.py                 # Master Orchestration Core (Llama-3.3 70B + Multi-Tool Router)
+│   ├── ears.py                  # Continuous local Speech-to-Text (STT) audio capture loop
+│   ├── eyes.py                  # Multimodal optical pipeline (Screen capture + Webcam feeds)
+│   ├── kinetic.py               # Kinetic OS Design System (C++ hardware shaders & chrome)
+│   ├── memory.py                # JarvisMemory SQLite semantic cognition & vector context drive
+│   ├── monitor.py               # Hardware telemetry polling daemons (CPU, RAM, Netsh Up/Down)
+│   ├── mouth.py                 # High-speed in-memory neural Text-to-Speech (TTS) engine
+│   ├── security.py              # Class-4 containment field, API validation, & Win32 socket armor
+│   └── watchdog.py              # Background optical threat detection daemon (Object tracking)
+├── dist/                        # Compiled Standalone Windows Binary output directory
+├── gui/                         # Holographic Front-End Presentation Layer
+│   ├── __pycache__/
+│   ├── hud.py                   # Frameless, DWM-bypassing transparent desktop overlay
+│   └── widgets.py               # Reusable modular PyQt6 / QtWebEngine dashboard components
+├── utils/                       # Low-Level System Intercept Hooks
+│   ├── __pycache__/
+│   └── automation.py            # Local OS execution chains (PyAutoGUI UI & raw OS macro hooks)
+├── venv/                        # Isolated Python Virtual Sandbox
+├── .env                         # Environment keys & secure uplinks (Local deployment only)
+├── .gitignore                   # Repository containment rules & local cache exclusion
+├── main.py                      # Primary application bootloader & global process supervisor
+└── requirements.txt             # Strict cross-platform production dependency roster
 
 ```
 
 ---
 
-## 🧠 Core Systems Detail
+## 🧠 Deep-Dive Module Specifications
 
-### 1. The Neural Core (`core/brain.py`)
+### 1. The Cognitive Front-End (`core/`)
 
-* **Speed Engine:** Utilizes the Groq SDK to run **Llama 3.3 70B** at hundreds of tokens per second.
-* **Sliding Window Memory:** Implements a strict, self-trimming context window (saving the last 10 interactions) to maintain perfect conversational awareness without hitting token overflow limits.
-* **Persistent Cognition:** Implements a long-term SQLite semantic database (`JarvisMemory`) to asynchronously save critical user facts, retrieving context dynamically via vector math.
+* **`brain.py`:** The central decision matrix. Implements a multi-tool execution parser that intercepts over-eager LLM double-dispatches (The *Concrete Wall* pattern). Features a sliding-window context memory that self-trims to maintain optimized token depth without losing conversational continuity. Maintains long-term spatial context via an internal *Hippocampus* memory anchor.
+* **`ears.py` & `mouth.py`:** The acoustic bridge. Reads local microphone hardware arrays and streams high-speed vocal responses back out through system audio pipes directly from memory buffers.
+* **`eyes.py`:** The visual cortex. Captures base64-encoded display matrices and forwards them to **Llama 3.2 11B Vision** to grant Jarvis real-time contextual awareness of active desktop windows.
+* **`memory.py`:** Interrogates an asynchronous local SQLite database (`jarvis_cognition.db`) to inject historical user constraints and personal facts dynamically into base system prompts.
+* **`kinetic.py`:** Injects custom hardware shaders across the entire OS suite, rendering pitch-black obsidian glass containers, custom draggable title bars, and neon chasing laser borders.
 
-### 2. The Optical Array (`core/eyes.py`)
+### 2. The Autonomic Nervous System (`core/monitor.py` & `utils/automation.py`)
 
-* **Vision Pipeline:** Captures base64-encoded screen states and webcam feeds.
-* **Multimodal Analysis:** Routes image data through Meta's **Llama 3.2 11B Vision** model, cross-wiring visual findings directly back into the primary text memory stream.
+* **Hardware Telemetry:** Non-blocking background worker threads continually poll `psutil` to track core temperatures, memory swapping, and network packet velocity.
+* **Machine Automation:** Employs raw Win32 API hooks and UI macro scripts to take physical control of the host machine (Adjusting volume gain, manipulating IDEs, reading screen coordinates, or forcing sleep states).
 
-### 3. The Autonomic Nervous System (`core/monitor.py` & `utils/automation.py`)
+### 3. The Spatial Reconnaissance Cockpit (`apps/map_intel.py`)
 
-* **Live Telemetry:** Background daemon threads continuously poll `psutil` and Windows network configurations to track CPU loads, physical RAM allocation, and real-time network bandwidth.
-* **Threat Detection:** Automatically interrupts the AI's standard loop to verbally warn the user if network uplinks drop or hardware thresholds exceed 90%.
-* **PC Automation:** Grants the AI execution rights to manipulate the host machine via `pyautogui` and `os` commands (Launch software, adjust audio gain, take screenshots, or force sleep states).
-
-### 4. The Holographic HUD (`gui/hud.py`)
-
-* **DWM Bypass:** Uses Qt window flags (`SplashScreen | FramelessWindowHint`) to strip Windows 11 borders, creating a genuine floating interface.
-* **WebEngine Dashboard:** Renders an animated HTML/CSS/JS dashboard that catches live JSON telemetry signals from the Python backend.
+* **Single-Process Chromium Diet:** Overrides QtWebEngine environment variables (`--single-process`), slashing RAM allocation by 70% and completely muffling console hardware acceleration warnings.
+* **The Altitude Matrix:** Automatically maps Esri geospatial ontology tags (`Country`, `State`, `City`, `Neighborhood`, `StreetAddress`) directly into precise orbital camera zoom levels.
+* **The 1.5km Self-Aware Flight Guard:** Intercepts redundant global coordinate lookups during manual zoom commands; preserves user UI interaction if the lens is already focused within a $1.5\text{ km}$ threshold.
+* **Localhost UDP Radio Station:** Listens actively on **UDP Port 7777** for asynchronous JSON-RPC command envelopes (`locate`, `zoom`), enabling non-blocking inter-process camera flights.
 
 ---
 
 ## 🛠️ Autonomous Tool Roster (15 Native Directives)
 
-J.A.R.V.I.S. is equipped with 15 rigid tool schemas governed by a concrete multi-tool execution router. Here is the complete operational roster:
+The orchestration engine routes user intent through 15 strictly anchored functional schemas:
 
-| Tool Directive | Internal JSON Parameters | Spoken Trigger Example |
+| Tool Directive | Internal JSON Schema | Operational Scope |
 | --- | --- | --- |
-| **`pilot_browser`** | `action`, `url`, `selector`, `text` | *"Open Chrome and navigate to github.com"* |
-| **`pilot_desktop`** | `action`, `app_name`, `element_name`, `text` | *"Type 'git push' into my terminal window"* |
-| **`control_application`** | `action`, `app_name` | *"Switch over to Spotify"* or *"Close Photoshop"* |
-| **`search_network`** | `query` | *"Search the web for the speed of light"* |
-| **`open_situation_room`** | `layer`, `custom_query` | *"Bring up the global conflict matrix"* |
-| **`open_tactical_map`** | `location` | *"Deploy tactical map grid onto Tokyo"* |
-| **`control_map_zoom`** | `direction`, `steps` | *"Zoom in two levels closer"* or *"Pull back to orbit"* |
-| **`open_atmospheric_radar`** | `location` | *"Check orbital atmospheric radar for Miami"* |
-| **`analyze_screen`** | *(None - Captures Base64)* | *"Scan my screen and tell me what this error means"* |
-| **`vision_click`** | `target_element` | *"Look at my screen and click the green 'Submit' button"* |
-| **`engage_watchdog`** | `target_object` | *"Engage optical watchdog and look for a coffee cup"* |
-| **`disarm_watchdog`** | *(None)* | *"Disarm the background optical watchdog"* |
-| **`control_hardware`** | `action` (`vol_up`, `mute`, `sleep`, etc.) | *"Mute system audio"* or *"Take a screenshot"* |
-| **`manage_dashboard`** | `action` (`minimize`, `combat_on`, etc.) | *"Minimize HUD dashboard"* or *"Engage combat mode"* |
-| **`remember_fact`** | `fact` | *"Remember that my primary coding language is Python"* |
+| **`pilot_browser`** | `action`, `url`, `selector`, `text` | Navigates web URLs, injects text, clicks DOM elements, or terminates browser sessions. |
+| **`pilot_desktop`** | `action`, `app_name`, `element_name`, `text` | Executes native UI automation across desktop windows or dispatches raw macro keystrokes. |
+| **`control_application`** | `action`, `app_name` | Spawns fresh executable processes, switches foreground focus, or hard-kills active apps. |
+| **`search_network`** | `query` | Interrogates public search indexes for real-time general knowledge aggregation. |
+| **`open_situation_room`** | `layer`, `custom_query` | Deploys the asynchronous `news_intel.py` matrix filtered by global geopolitical vectors. |
+| **`open_tactical_map`** | `location` | Deploys `map_intel.py` and locks low-Earth orbit satellite imagery onto target sectors. |
+| **`control_map_zoom`** | `direction`, `steps` | Beams JSON-RPC packets over UDP Port 7777 to dynamically alter active map camera altitudes. |
+| **`open_atmospheric_radar`** | `location` | Deploys `weather_intel.py` to stream live Open-Meteo barometric vitals and 5-day forecasts. |
+| **`analyze_screen`** | *(None - Captures Base64)* | Compares user vocal questions against real-time base64 visual desktop captures. |
+| **`vision_click`** | `target_element` | Employs spatial pixel calculation to locate and left-click specific UI buttons on screen. |
+| **`engage_watchdog`** | `target_object` | Spawns an isolated optical background thread to actively watch webcam feeds for target entities. |
+| **`disarm_watchdog`** | *(None)* | Safely terminates and detaches active optical background surveillance threads. |
+| **`control_hardware`** | `action` (`vol_up`, `mute`, `sleep`, etc.) | Dispatches physical motherboard instructions to adjust gain, capture buffers, or trigger sleep states. |
+| **`manage_dashboard`** | `action` (`minimize`, `maximize`, etc.) | Modifies the holographic floating HUD presentation layout states. |
+| **`remember_fact`** | `fact` | Commits permanent user traits or critical preferences into the SQLite cognition vector drive. |
 
 ---
 
-## ⚡ Quick Start Guide
+## ⚡ Setup & Cold Start Protocol
 
 ### Prerequisites
 
-* Python 3.11 or higher
-* Active microphone and webcam
-* A free [Groq API Key](https://console.groq.com/keys)
+* Windows 11 OS (64-bit)
+* Python 3.11+
+* Dedicated hardware microphone & optical camera array
+* A verified [Groq Cloud API Key](https://console.groq.com/keys)
 
-### Installation
+### Local Deployment
 
-1. **Clone the repository:**
+1. **Clone the Master Repository:**
 ```bash
-git clone [https://github.com/YOUR_USERNAME/jarvis_git.git](https://github.com/YOUR_USERNAME/jarvis_git.git)
+git clone [https://github.com/YOUR_GITHUB_NAME/jarvis_git.git](https://github.com/YOUR_GITHUB_NAME/jarvis_git.git)
 cd jarvis_git
 
 ```
 
 
-2. **Establish the Sandbox Environment:**
+2. **Initialize the Virtual Sandbox:**
 ```bash
 python -m venv venv
-# Activate on Windows:
 .\venv\Scripts\activate
 
 ```
 
 
-3. **Install Core Dependencies:**
+3. **Mount Cross-Platform Dependencies:**
 ```bash
 pip install -r requirements.txt
 
 ```
 
 
-4. **Configure the Neural Link:**
-Create a `.env` file in the root directory:
+4. **Establish Security Keys:**
+Create a secure `.env` file in the project root adjacent to `main.py`:
 ```env
 GROQ_API_KEY=your_groq_api_key_here
+NEWS_API_KEY=your_worldnews_api_key_here
 
 ```
 
 
-5. **Initiate Cold Start:**
+5. **Turn the Key:**
 ```bash
 python main.py
 
@@ -141,81 +154,68 @@ python main.py
 
 ---
 
-## 📻 Inter-Process Telemetry Tutorial (UDP JSON-RPC)
+## 📻 Inter-Process Telemetry Specification (UDP Port 7777)
 
-The Spatial Intelligence app (`apps/map_intel.py`) runs an active internal radio station on **UDP Port 7777**. Any script, background terminal, or automated voice engine can instantly snap the map's focus, alter coordinates, or trigger orbital adjustments by firing non-blocking network datagrams.
+You can remotely control the Spatial Intelligence module (`apps/map_intel.py`) from any external script or command prompt while the application is active.
 
-### Map Telemetry Interface Specification
+### Supported JSON-RPC Command Packets
 
-The app accepts standardized JSON-RPC envelopes containing a `command` parameter:
-
-#### A. Fly to Location (`locate`)
-
-Moves the lens to a specific geographic region with automated Esri fallback layers.
+#### A. Target Intercept (`locate`)
 
 ```json
 {
   "command": "locate",
-  "place": "Munnar, Kerala"
+  "place": "Manhattan, New York"
 }
 
 ```
 
-#### B. Scale Viewport (`zoom`)
-
-Adjusts magnification dynamically by a factor of steps.
+#### B. Optical Optics (`zoom`)
 
 ```json
 {
   "command": "zoom",
-  "direction": "in",
+  "direction": "out",
   "factor": 2
 }
 
 ```
 
-### Quick Python Transmitter Script
-
-Drop this snippet into any utility file to test remote execution while `map_intel.py` is actively running:
+### Python Datagram Transmitter Snippet
 
 ```python
 import socket
 import json
 
-def dispatch_tactical_packet(packet_dict):
-    client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    payload = json.dumps(packet_dict).encode('utf-8')
-    client.sendto(payload, ("127.0.0.1", 7777))
-    print(f"[PACKET DISPATCHED] -> {packet_dict}")
+def blast_ipc_packet(payload_dict):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.sendto(json.dumps(payload_dict).encode('utf-8'), ("127.0.0.1", 7777))
 
-# Fly to target sector
-dispatch_tactical_packet({"command": "locate", "place": "Vagamon, Kerala"})
-
-# Zoom in closer
-dispatch_tactical_packet({"command": "zoom", "direction": "in", "factor": 2})
+# Soar across the globe to London instantly
+blast_ipc_packet({"command": "locate", "place": "Big Ben, London"})
 
 ```
 
 ---
 
-## 📦 Compiling to Standalone Executable
+## 📦 PyInstaller Standalone Binary Compilation
 
-To compile J.A.R.V.I.S. as a silent, background desktop application without leaving a hanging terminal window open, compress your workspace via PyInstaller.
+To run Jarvis silently in the Windows background without an open console terminal, compile the suite into a single native binary:
 
 ```bash
 pyinstaller --noconfirm --windowed --add-data "assets;assets" --hidden-import="psutil" --hidden-import="groq" --hidden-import="edge_tts" --hidden-import="cv2" main.py
 
 ```
 
-> ⚠️ **Post-Compilation Directive:** After compilation completes, you must manually copy your local security `.env` file directly into the newly generated `dist/main/` folder immediately adjacent to the `main.exe` binary.
+> ⚠️ **Mandatory Post-Build Action:** PyInstaller completely ignores local environment files for security reasons. You must manually copy your `.env` file into the generated `dist/main/` folder directly next to `main.exe` before execution.
 
 ---
 
-## 🛡️ License & Disclaimer
+## 🛡️ Operational License & Security Disclaimer
 
-This project is licensed under the **GNU License**.
+This core architecture is released under the **GNU General Public License v3.0**.
 
-**Security Warning:** This software bridges a generative AI model with local machine execution protocols (closing applications, reading clipboard data, altering power states). It is strictly designed for developer research and local experimentation. Always verify safety constraints in the execution chains inside `utils/automation.py` before deploying wide-permission access keys.
+**CRITICAL HAZARD WARNING:** This software grants a generative neural network automated access to physical host execution layers (`os.system`, process termination, clipboard monitoring, power state alterations). It is engineered strictly for local developer experimentation and academic research. Review all execution paths inside `utils/automation.py` before attaching wide-permission access keys.
 
 ```
 
