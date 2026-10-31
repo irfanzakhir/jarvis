@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QLabel, QScrollArea, QFrame, QHBoxLayout, QPushButton, QGridLayout, QSizeGrip)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QPropertyAnimation, pyqtProperty, QRectF, QPoint
 from PyQt6.QtGui import QCursor, QPixmap, QImage, QPainter, QConicalGradient, QColor, QPen
+from PyQt6.QtNetwork import QUdpSocket, QHostAddress
 
 load_dotenv()
 API_KEY = os.getenv("WORLDNEWS_API_KEY") or os.getenv("NEWS_API_KEY")
@@ -23,14 +24,10 @@ LAYER_QUERIES = {
     "NATURAL ANOMALIES": "earthquake OR hurricane OR 'extreme weather' OR wildfire OR eruption"
 }
 
-# =========================================================================
-# 1. NATIVE C++ HARDWARE SHADER: The CyberCard (Chasing Laser Border)
-# =========================================================================
 class CyberCard(QFrame):
     def __init__(self, parent=None, sweep_speed=3000):
         super().__init__(parent)
         self._angle = 0.0
-        
         self._anim = QPropertyAnimation(self, b"glowAngle")
         self._anim.setStartValue(0.0)
         self._anim.setEndValue(360.0)
@@ -49,54 +46,39 @@ class CyberCard(QFrame):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
         rect = self.rect()
         pad = 1.5
         draw_rect = QRectF(rect).adjusted(pad, pad, -pad, -pad)
-        
         painter.setBrush(QColor(5, 7, 12, 220))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(draw_rect, 6.0, 6.0)
         
         center = draw_rect.center()
         grad = QConicalGradient(center, self._angle)
-        
         grad.setColorAt(0.0, QColor(0, 212, 255, 255))     
         grad.setColorAt(0.18, QColor(0, 212, 255, 0))      
         grad.setColorAt(0.85, QColor(0, 255, 170, 0))      
         grad.setColorAt(1.0, QColor(0, 255, 170, 255))     
 
-        pen = QPen(grad, 2.0)
-        painter.setPen(pen)
+        painter.setPen(QPen(grad, 2.0))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(draw_rect, 6.0, 6.0)
 
 
-# =========================================================================
-# 2. THE KINETIC CHROME: Custom Title Bar with Hardware Pin Toggle
-# =========================================================================
 class CyberTitleBar(QFrame):
     def __init__(self, parent_window):
         super().__init__(parent_window)
         self.parent_window = parent_window
         self.setFixedHeight(38)
-        self.setStyleSheet("""
-            QFrame {
-                background-color: rgba(5, 7, 12, 245);
-                border-bottom: 1px solid rgba(0, 212, 255, 0.3);
-            }
-        """)
-        
+        self.setStyleSheet("background-color: rgba(5, 7, 12, 245); border-bottom: 1px solid rgba(0, 212, 255, 0.3);")
         self.is_dragging = False
         self.drag_start_pos = QPoint()
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(15, 0, 10, 0)
-
         title_lbl = QLabel("GLOBAL SITUATION ROOM // SYNDICATE DECRYPTION")
         title_lbl.setStyleSheet("color: #00d4ff; font: bold 13px 'Consolas'; border: none;")
 
-        # --- THE 4 WINDOW CONTROLLERS ---
         self.btn_pin = QPushButton("📌") 
         btn_min = QPushButton("🗕")
         self.btn_max = QPushButton("🗗") 
@@ -124,19 +106,15 @@ class CyberTitleBar(QFrame):
         layout.addWidget(btn_close)
 
     def toggle_always_on_top(self):
-        """Dynamically injects or revokes the DWM Topmost hardware flag live"""
         flags = self.parent_window.windowFlags()
         if bool(flags & Qt.WindowType.WindowStaysOnTopHint):
-            # Turn OFF
             flags &= ~Qt.WindowType.WindowStaysOnTopHint
             self.btn_pin.setStyleSheet("QPushButton { color: rgba(255,255,255,0.4); background: transparent; border: none; font-size: 13px; }")
         else:
-            # Turn ON
             flags |= Qt.WindowType.WindowStaysOnTopHint
             self.btn_pin.setStyleSheet("QPushButton { color: #00ffaa; background: rgba(0,255,170,0.15); border: 1px solid #00ffaa; font-size: 13px; border-radius: 4px; }")
-
         self.parent_window.setWindowFlags(flags)
-        self.parent_window.show() # Qt mandate: forcing a live re-show applies the flag instantly
+        self.parent_window.show()
 
     def toggle_window_mode(self):
         if self.parent_window.isFullScreen():
@@ -152,11 +130,9 @@ class CyberTitleBar(QFrame):
             self.drag_start_pos = event.globalPosition().toPoint() - self.parent_window.frameGeometry().topLeft()
 
     def mouseMoveEvent(self, event):
-        if self.is_dragging:
-            self.parent_window.move(event.globalPosition().toPoint() - self.drag_start_pos)
+        if self.is_dragging: self.parent_window.move(event.globalPosition().toPoint() - self.drag_start_pos)
 
-    def mouseReleaseEvent(self, event):
-        self.is_dragging = False
+    def mouseReleaseEvent(self, event): self.is_dragging = False
 
 
 class TacticalWorker(QThread):
@@ -176,8 +152,7 @@ class TacticalWorker(QThread):
                 sym_map = {'^GSPC': 'S&P500', 'AAPL': 'AAPL', 'NVDA': 'NVDA', 'TSLA': 'TSLA', 'BTC-USD': 'BTC'}
                 for sym, label in sym_map.items():
                     data = tickers.tickers[sym].history(period="1d")
-                    if not data.empty:
-                        prices.append(f"{label}: ${data['Close'].iloc[-1]:.2f}")
+                    if not data.empty: prices.append(f"{label}: ${data['Close'].iloc[-1]:.2f}")
                 stock_str = "   ||   ".join(prices)
             except Exception as e: print(f"Telemetry stream interrupted: {e}")
 
@@ -216,7 +191,6 @@ class TacticalWorker(QThread):
                         try:
                             with open(CACHE_FILE, 'r') as f: cache_store = json.load(f)
                         except: pass
-                    
                     cache_store[self.layer] = {'timestamp': time.time(), 'data': news_items}
                     with open(CACHE_FILE, 'w') as f: json.dump(cache_store, f)
                 else:
@@ -229,7 +203,6 @@ class TacticalWorker(QThread):
                     except: item['img_bytes'] = None
 
             self.data_ready.emit(news_items, stock_str, self.layer)
-
         except Exception as e: self.error_signal.emit(str(e))
 
 
@@ -237,24 +210,40 @@ class NewsIntelApp(QMainWindow):
     def __init__(self, default_layer="CONFLICTS"):
         super().__init__()
         self.current_layer = default_layer
-
         self.setWindowTitle("Global Situation Room")
         self.resize(1400, 800) 
-        
-        # --- THE JAILBREAK: Strictly standard frameless hint. Zero 'Always on Top' ---
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        
         self.showFullScreen()
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         self.init_ui()
         self.switch_layer(self.current_layer)
 
+        # =====================================================================
+        # UDP RADIO LISTENER (PORT 7778)
+        # =====================================================================
+        self.udp_receiver = QUdpSocket(self)
+        self.udp_receiver.bind(QHostAddress.SpecialAddress.LocalHost, 7778)
+        self.udp_receiver.readyRead.connect(self.intercept_telemetry_packet)
+
+    def intercept_telemetry_packet(self):
+        """Catches UDP datagrams to switch news layers without opening duplicate windows"""
+        while self.udp_receiver.hasPendingDatagrams():
+            size = self.udp_receiver.pendingDatagramSize()
+            datagram, host, port = self.udp_receiver.readDatagram(size)
+            raw_payload = datagram.decode('utf-8').strip()
+            try:
+                packet = json.loads(raw_payload)
+                target = packet.get("layer", raw_payload)
+            except:
+                target = raw_payload
+            print(f"[NEWS RADIO]: Intercepted UDP switch command -> {target}")
+            self.switch_layer(target)
+
     def init_ui(self):
         self.central_widget = QFrame()
         self.central_widget.setStyleSheet("QFrame { background-color: rgba(4, 5, 8, 0.99); border: 1px solid #00d4ff; }")
         self.setCentralWidget(self.central_widget)
-        
         self.main_layout = QVBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(1, 1, 1, 1) 
         self.main_layout.setSpacing(0)
@@ -322,7 +311,6 @@ class NewsIntelApp(QMainWindow):
 
     def switch_layer(self, target_name):
         self.current_layer = target_name
-        
         for name, btn in self.layer_buttons.items():
             if name.upper() == target_name.upper():
                 btn.setStyleSheet("QPushButton { color: #00ffaa; border: 1px solid #00ffaa; background: rgba(0, 255, 170, 0.15); font: bold 13px 'Consolas'; border-radius: 4px; }")
@@ -338,6 +326,11 @@ class NewsIntelApp(QMainWindow):
         status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.grid_layout.addWidget(status_lbl, 0, 0, 1, 2)
 
+        if hasattr(self, 'worker') and self.worker.isRunning():
+            self.worker.disconnect()
+            self.worker.terminate()
+            self.worker.wait()
+
         self.worker = TacticalWorker(target_name)
         self.worker.data_ready.connect(self.populate_ui)
         self.worker.error_signal.connect(self.show_error)
@@ -346,7 +339,6 @@ class NewsIntelApp(QMainWindow):
     def populate_ui(self, news_items, stock_str, target_layer):
         if target_layer != self.current_layer: return
         self.ticker_label.setText(f"GLOBAL INDICES: {stock_str}")
-        
         for i in reversed(range(self.grid_layout.count())): 
             w = self.grid_layout.itemAt(i).widget()
             if w: w.deleteLater()
@@ -363,10 +355,8 @@ class NewsIntelApp(QMainWindow):
             title = item.get("title", "UNVERIFIED SOURCE")
             text_body = item.get("text", "")
             snippet = text_body[:280] + "..." if len(text_body) > 280 else text_body
-            
             sweep_speed = 2800 + (idx * 150)
             self.add_tactical_card(title, snippet, item.get('img_bytes'), row, col, sweep_speed)
-            
             col += 1
             if col > 1: col = 0; row += 1
 
@@ -408,7 +398,6 @@ class NewsIntelApp(QMainWindow):
         text_layout.addWidget(title_lbl)
         text_layout.addWidget(desc_lbl)
         layout.addWidget(text_container)
-        
         self.grid_layout.addWidget(card, row, col)
 
     def show_error(self, message):

@@ -7,9 +7,10 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QLabel, QFrame, QHBoxLayout, QPushButton, QGridLayout, QSizeGrip)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QPropertyAnimation, pyqtProperty, QRectF, QTimer, QPoint
 from PyQt6.QtGui import QCursor, QPainter, QConicalGradient, QColor, QPen
+from PyQt6.QtNetwork import QUdpSocket, QHostAddress
 
 CACHE_FILE = "openmeteo_atmospheric_cache.json"
-CACHE_EXPIRY = 1800  # 30-Minute atmospheric data lock
+CACHE_EXPIRY = 1800  
 
 WMO_CODES = {
     0: ("CLEAR SKY // OPTIMAL VISIBILITY", "☀️"),
@@ -35,14 +36,10 @@ WMO_CODES = {
     99: ("HEAVY THUNDERSTORM // EXTREME HAIL", "⛈️")
 }
 
-# =========================================================================
-# 1. NATIVE C++ HARDWARE SHADER: The CyberCard (Chasing Laser Border)
-# =========================================================================
 class CyberCard(QFrame):
     def __init__(self, parent=None, sweep_speed=3000):
         super().__init__(parent)
         self._angle = 0.0
-        
         self._anim = QPropertyAnimation(self, b"glowAngle")
         self._anim.setStartValue(0.0)
         self._anim.setEndValue(360.0)
@@ -61,55 +58,39 @@ class CyberCard(QFrame):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
         rect = self.rect()
         pad = 1.5
         draw_rect = QRectF(rect).adjusted(pad, pad, -pad, -pad)
-        
-        # Translucent dark glass core
         painter.setBrush(QColor(6, 8, 14, 210))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(draw_rect, 6.0, 6.0)
         
         center = draw_rect.center()
         grad = QConicalGradient(center, self._angle)
-        
-        grad.setColorAt(0.0, QColor(0, 212, 255, 255))     # Cyan tail
-        grad.setColorAt(0.18, QColor(0, 212, 255, 0))      # Fade to void
-        grad.setColorAt(0.85, QColor(0, 255, 170, 0))      # Void space
-        grad.setColorAt(1.0, QColor(0, 255, 170, 255))     # Neon Green Beam Head
+        grad.setColorAt(0.0, QColor(0, 212, 255, 255))     
+        grad.setColorAt(0.18, QColor(0, 212, 255, 0))      
+        grad.setColorAt(0.85, QColor(0, 255, 170, 0))      
+        grad.setColorAt(1.0, QColor(0, 255, 170, 255))     
 
-        pen = QPen(grad, 2.0)
-        painter.setPen(pen)
+        painter.setPen(QPen(grad, 2.0))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(draw_rect, 6.0, 6.0)
 
 
-# =========================================================================
-# 2. THE KINETIC CHROME: Custom Title Bar with Hardware Pin Toggle
-# =========================================================================
 class CyberTitleBar(QFrame):
     def __init__(self, parent_window):
         super().__init__(parent_window)
         self.parent_window = parent_window
         self.setFixedHeight(38)
-        self.setStyleSheet("""
-            QFrame {
-                background-color: rgba(5, 7, 12, 245);
-                border-bottom: 1px solid rgba(0, 212, 255, 0.3);
-            }
-        """)
-        
+        self.setStyleSheet("background-color: rgba(5, 7, 12, 245); border-bottom: 1px solid rgba(0, 212, 255, 0.3);")
         self.is_dragging = False
         self.drag_start_pos = QPoint()
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(15, 0, 10, 0)
-
         self.title_lbl = QLabel("ATMOSPHERIC RADAR TELEMETRY // LINKING ORBITAL SHARDS")
         self.title_lbl.setStyleSheet("color: #00d4ff; font: bold 13px 'Consolas'; border: none;")
 
-        # --- THE 4 WINDOW CONTROLLERS ---
         self.btn_pin = QPushButton("📌") 
         btn_min = QPushButton("🗕")
         self.btn_max = QPushButton("🗗") 
@@ -144,7 +125,6 @@ class CyberTitleBar(QFrame):
         else:
             flags |= Qt.WindowType.WindowStaysOnTopHint
             self.btn_pin.setStyleSheet("QPushButton { color: #00ffaa; background: rgba(0,255,170,0.15); border: 1px solid #00ffaa; font-size: 13px; border-radius: 4px; }")
-
         self.parent_window.setWindowFlags(flags)
         self.parent_window.show()
 
@@ -162,11 +142,9 @@ class CyberTitleBar(QFrame):
             self.drag_start_pos = event.globalPosition().toPoint() - self.parent_window.frameGeometry().topLeft()
 
     def mouseMoveEvent(self, event):
-        if self.is_dragging:
-            self.parent_window.move(event.globalPosition().toPoint() - self.drag_start_pos)
+        if self.is_dragging: self.parent_window.move(event.globalPosition().toPoint() - self.drag_start_pos)
 
-    def mouseReleaseEvent(self, event):
-        self.is_dragging = False
+    def mouseReleaseEvent(self, event): self.is_dragging = False
 
 
 class OpenMeteoWorker(QThread):
@@ -254,18 +232,55 @@ class WeatherIntelApp(QMainWindow):
     def __init__(self, target_sector):
         super().__init__()
         self.target_sector = target_sector
-        
         self.setWindowTitle("Atmospheric Telemetry Room")
-        self.resize(1400, 800) # Default floating window geometry
-        
-        # --- THE JAILBREAK: Purged WindowStaysOnTopHint from boot ---
+        self.resize(1400, 800) 
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.showFullScreen()
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         self.init_ui()
+        self.refresh_sector(self.target_sector)
+
+        # =====================================================================
+        # UDP RADIO LISTENER (PORT 7779)
+        # =====================================================================
+        self.udp_receiver = QUdpSocket(self)
+        self.udp_receiver.bind(QHostAddress.SpecialAddress.LocalHost, 7779)
+        self.udp_receiver.readyRead.connect(self.intercept_telemetry_packet)
+
+    def intercept_telemetry_packet(self):
+        """Catches UDP datagrams to switch weather sectors in-place"""
+        while self.udp_receiver.hasPendingDatagrams():
+            size = self.udp_receiver.pendingDatagramSize()
+            datagram, host, port = self.udp_receiver.readDatagram(size)
+            raw_payload = datagram.decode('utf-8').strip()
+            try:
+                packet = json.loads(raw_payload)
+                target = packet.get("sector", raw_payload)
+            except:
+                target = raw_payload
+            print(f"[WEATHER RADIO]: Intercepted UDP sector switch -> {target}")
+            self.refresh_sector(target)
+
+    def refresh_sector(self, sector_name):
+        self.target_sector = sector_name
+        self.sector_lbl.setText(f"ORBITAL METEO LINK // SECTOR: [{sector_name.upper()}]")
         
-        self.worker = OpenMeteoWorker(self.target_sector)
+        for i in reversed(range(self.viewport_layout.count())):
+            w = self.viewport_layout.itemAt(i).widget()
+            if w: w.deleteLater()
+
+        status = QLabel(f"RE-CALIBRATING ORBITAL SHARDS FOR [{sector_name.upper()}]...")
+        status.setStyleSheet("color: #00d4ff; font-family: 'Consolas'; font-size: 20px;")
+        status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.viewport_layout.addWidget(status)
+
+        if hasattr(self, 'worker') and self.worker.isRunning():
+            self.worker.disconnect()
+            self.worker.terminate()
+            self.worker.wait()
+
+        self.worker = OpenMeteoWorker(sector_name)
         self.worker.data_ready.connect(self.render_telemetry)
         self.worker.error_signal.connect(self.show_error)
         self.worker.start()
@@ -274,26 +289,21 @@ class WeatherIntelApp(QMainWindow):
         self.central_widget = QFrame()
         self.central_widget.setStyleSheet("QFrame { background-color: rgba(4, 5, 8, 0.99); border: 1px solid #00d4ff; }")
         self.setCentralWidget(self.central_widget)
-        
         self.main_layout = QVBoxLayout(self.central_widget)
-        self.main_layout.setContentsMargins(1, 1, 1, 1) # Seamless edge alignment
+        self.main_layout.setContentsMargins(1, 1, 1, 1) 
         self.main_layout.setSpacing(0)
 
-        # Mount Custom Kinetic Title Bar Chrome
         self.title_bar = CyberTitleBar(self)
         self.main_layout.addWidget(self.title_bar)
 
-        # Main view space wrapper
         self.body_container = QWidget()
         self.body_layout = QVBoxLayout(self.body_container)
         self.body_layout.setContentsMargins(40, 30, 40, 30)
         self.body_layout.setSpacing(20)
 
-        # Header sub-layout containing status loops
         self.sub_header = QHBoxLayout()
         self.spinner_lbl = QLabel("⠋")
         self.spinner_lbl.setStyleSheet("color: #00ffaa; font-family: 'Consolas'; font-size: 24px; font-weight: bold;")
-        
         self.sector_lbl = QLabel(f"ORBITAL METEO LINK // SECTOR: [{self.target_sector.upper()}]")
         self.sector_lbl.setStyleSheet("color: #00d4ff; font-family: 'Consolas'; font-size: 20px; font-weight: bold; margin-left: 10px;")
         
@@ -302,14 +312,12 @@ class WeatherIntelApp(QMainWindow):
         self.sub_header.addStretch()
         self.body_layout.addLayout(self.sub_header)
 
-        # Radar Sweep Animation Logic
         self.radar_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         self.radar_idx = 0
         self.spinner_timer = QTimer(self)
         self.spinner_timer.timeout.connect(self.animate_radar_sweep)
         self.spinner_timer.start(100)
 
-        # Master Display Viewport Stacking Grid
         self.viewport_stack = QWidget()
         self.viewport_grid = QGridLayout(self.viewport_stack)
         self.viewport_grid.setContentsMargins(0, 0, 0, 0)
@@ -320,12 +328,6 @@ class WeatherIntelApp(QMainWindow):
         self.viewport_layout.setContentsMargins(0, 0, 0, 0)
         self.viewport_grid.addWidget(self.viewport, 0, 0)
 
-        self.status_lbl = QLabel("ACQUIRING OPEN-METEO SATELLITE TELEMETRY...")
-        self.status_lbl.setStyleSheet("color: #00d4ff; font-family: 'Consolas'; font-size: 20px;")
-        self.status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.viewport_layout.addWidget(self.status_lbl)
-
-        # Append hardware resize grip anchor at the bottom-right corner layer
         self.resizer = QSizeGrip(self)
         self.resizer.setFixedSize(20, 20)
         self.resizer.setStyleSheet("QSizeGrip { background: transparent; }")
@@ -339,7 +341,10 @@ class WeatherIntelApp(QMainWindow):
         self.spinner_lbl.setText(self.radar_frames[self.radar_idx])
 
     def render_telemetry(self, current, forecast, official_name):
-        self.status_lbl.deleteLater()
+        for i in reversed(range(self.viewport_layout.count())):
+            w = self.viewport_layout.itemAt(i).widget()
+            if w: w.deleteLater()
+
         self.title_bar.title_lbl.setText(f"ATMOSPHERIC RADAR TELEMETRY // SPATIAL LOCK: [{official_name}]")
         self.sector_lbl.setText(f"METEO RADAR UPLINK SECURE // LOCK SECTOR: [{official_name.split(',')[0]}]")
 
@@ -348,17 +353,14 @@ class WeatherIntelApp(QMainWindow):
         upper_layout.setContentsMargins(0, 0, 0, 0)
         upper_layout.setSpacing(30)
 
-        # --- LEFT: CYBERCARD RECONNAISSANCE CORE ---
         self.temp_card = CyberCard(sweep_speed=2800)
         temp_layout = QVBoxLayout(self.temp_card)
         temp_layout.setContentsMargins(25, 25, 25, 25)
         
         t_lbl = QLabel(f"{round(current['temp'])}°C {current['icon']}")
         t_lbl.setStyleSheet("color: #ffffff; font-family: 'Consolas'; font-size: 72px; font-weight: bold; border: none; background: transparent;")
-        
         c_lbl = QLabel(current['condition'])
         c_lbl.setStyleSheet("color: #00ffaa; font-family: 'Consolas'; font-size: 18px; font-weight: bold; letter-spacing: 1px; border: none; background: transparent;")
-        
         rf_lbl = QLabel(f"APPARENT THERMAL FEEL: {round(current['apparent'])}°C\nBAROMETRIC SYSTEM: {current['pressure']} hPa")
         rf_lbl.setStyleSheet("color: rgba(255,255,255,0.6); font-family: 'Consolas'; font-size: 13px; border: none; background: transparent; margin-top: 10px;")
 
@@ -368,7 +370,6 @@ class WeatherIntelApp(QMainWindow):
         temp_layout.addStretch()
         upper_layout.addWidget(self.temp_card, stretch=1)
 
-        # --- RIGHT: 4-QUAD MATRIX SYSTEMS ---
         quad_container = QWidget()
         quad_layout = QGridLayout(quad_container)
         quad_layout.setContentsMargins(0, 0, 0, 0)
@@ -386,13 +387,10 @@ class WeatherIntelApp(QMainWindow):
             box = CyberCard(sweep_speed=spd) 
             box_layout = QVBoxLayout(box)
             box_layout.setContentsMargins(15, 15, 15, 15)
-            
             l1 = QLabel(label)
             l1.setStyleSheet("color: rgba(255,255,255,0.4); font-family: 'Consolas'; font-size: 11px; border: none; background: transparent;")
-            
             l2 = QLabel(val)
             l2.setStyleSheet(f"color: {color}; font-family: 'Consolas'; font-size: 17px; font-weight: bold; border: none; background: transparent; margin-top: 4px;")
-            
             box_layout.addWidget(l1)
             box_layout.addWidget(l2)
             quad_layout.addWidget(box, r, c)
@@ -400,7 +398,6 @@ class WeatherIntelApp(QMainWindow):
         upper_layout.addWidget(quad_container, stretch=2)
         self.viewport_layout.addWidget(upper_container, stretch=2)
 
-        # --- LOWER VIEWPORT: 5-DAY HORIZONTAL MATRIX FORECAST ---
         self.viewport_layout.addSpacing(15)
         fore_banner = QFrame()
         fore_banner.setStyleSheet("background: rgba(0,0,0,0.5); border: 1px solid rgba(0,212,255,0.15); border-top: 2px solid #00d4ff; padding: 12px;")
@@ -412,19 +409,15 @@ class WeatherIntelApp(QMainWindow):
             d_box = CyberCard(sweep_speed=3000 + (idx * 200))
             d_layout = QVBoxLayout(d_box)
             d_layout.setContentsMargins(10, 10, 10, 10)
-            
             dt_lbl = QLabel(day['date'])
             dt_lbl.setStyleSheet("color: #00d4ff; font: bold 14px 'Consolas'; border: none; background: transparent;")
             dt_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            
             icon_lbl = QLabel(f"{day['icon']}\n{day['cond']}")
             icon_lbl.setStyleSheet("color: #ffffff; font: 11px 'Consolas'; border: none; background: transparent; margin-top: 3px;")
             icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            
             t_span = QLabel(f"↓{round(day['min'])}°  ↑{round(day['max'])}°")
             t_span.setStyleSheet("color: #00ffaa; font: bold 13px 'Consolas'; border: none; background: transparent; margin-top: 8px;")
             t_span.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
             d_layout.addWidget(dt_lbl)
             d_layout.addWidget(icon_lbl)
             d_layout.addWidget(t_span)
@@ -433,8 +426,13 @@ class WeatherIntelApp(QMainWindow):
         self.viewport_layout.addWidget(fore_banner, stretch=1)
 
     def show_error(self, message):
-        self.status_lbl.setText(f"CRITICAL OVERHEAT FAULT: {message}")
-        self.status_lbl.setStyleSheet("color: #ff003c; font-family: 'Consolas'; font-size: 18px;")
+        for i in reversed(range(self.viewport_layout.count())):
+            w = self.viewport_layout.itemAt(i).widget()
+            if w: w.deleteLater()
+        err = QLabel(f"CRITICAL OVERHEAT FAULT: {message}")
+        err.setStyleSheet("color: #ff003c; font-family: 'Consolas'; font-size: 18px;")
+        err.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.viewport_layout.addWidget(err)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

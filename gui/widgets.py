@@ -1,11 +1,13 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
-from PyQt6.QtCore import Qt, QPoint
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QGraphicsOpacityEffect
+from PyQt6.QtCore import Qt, QPoint, pyqtSignal, QPropertyAnimation, QEasingCurve
 
 class DraggableHUDWidget(QFrame):
+    closed_signal = pyqtSignal(object)
+
     def __init__(self, title="SYSTEM COMPONENT", parent=None):
         # Set to Tool window so it floats above everything and doesn't clutter the taskbar
         super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         self.main_layout = QVBoxLayout(self)
@@ -24,11 +26,18 @@ class DraggableHUDWidget(QFrame):
         
         self.minimize_btn = QPushButton("-")
         self.minimize_btn.setFixedSize(20, 20)
+        self.minimize_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.minimize_btn.clicked.connect(self.toggle_minimize)
+
+        self.close_btn = QPushButton("✕")
+        self.close_btn.setFixedSize(20, 20)
+        self.close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.close_btn.clicked.connect(self.close_widget)
 
         self.title_layout.addWidget(self.title_label)
         self.title_layout.addStretch()
         self.title_layout.addWidget(self.minimize_btn)
+        self.title_layout.addWidget(self.close_btn)
 
         # ==========================================
         # BUILD THE CONTENT AREA
@@ -44,17 +53,22 @@ class DraggableHUDWidget(QFrame):
         self._is_dragging = False
         self._drag_start_pos = QPoint()
 
+        # State tracking for opening/closing animations
+        self._is_opening = False
+        self._is_closing = False
+        self._close_anim = None
+
         # Apply default cyan theme on boot
         self.set_theme(combat=False)
         
         # Memory for the accordion collapse
         self._expanded_height = None
-        
+
 
     # ==========================================
     # DYNAMIC AESTHETIC ENGINE
     # ==========================================
-    def set_theme(self, combat=False):
+    def set_theme(self, combat=False, antigravity=False):
         if combat:
             # TACTICAL RED
             self.setStyleSheet("""
@@ -73,6 +87,34 @@ class DraggableHUDWidget(QFrame):
                 border-top-left-radius: 5px; 
                 border-top-right-radius: 5px;
             """)
+            if hasattr(self, 'close_btn'):
+                self.close_btn.setStyleSheet("""
+                    QPushButton { color: #ff003c; border: none; font-weight: bold; font-size: 14px; background: transparent; }
+                    QPushButton:hover { color: #ffffff; background-color: rgba(255, 0, 60, 100); border-radius: 3px; }
+                """)
+        elif antigravity:
+            # ANTIGRAVITY QUANTUM VIOLET & ELECTRIC CYAN
+            self.setStyleSheet("""
+                DraggableHUDWidget { 
+                    background-color: rgba(14, 10, 28, 230); 
+                    border: 1px solid rgba(161, 66, 244, 150); 
+                    border-radius: 6px; 
+                }
+                QLabel { color: #00e5ff; font-family: 'Consolas', monospace; font-weight: bold; }
+                QPushButton { background-color: transparent; color: #a142f4; border: none; font-weight: bold; font-size: 16px; }
+                QPushButton:hover { color: #ffffff; background-color: rgba(161, 66, 244, 60); }
+            """)
+            self.title_bar.setStyleSheet("""
+                background-color: rgba(45, 15, 80, 180); 
+                border-bottom: 1px solid #a142f4; 
+                border-top-left-radius: 6px; 
+                border-top-right-radius: 6px;
+            """)
+            if hasattr(self, 'close_btn'):
+                self.close_btn.setStyleSheet("""
+                    QPushButton { color: #a142f4; border: none; font-weight: bold; font-size: 14px; background: transparent; }
+                    QPushButton:hover { color: #00e5ff; background-color: rgba(161, 66, 244, 100); border-radius: 3px; }
+                """)
         else:
             # STANDARD CYAN
             self.setStyleSheet("""
@@ -91,10 +133,54 @@ class DraggableHUDWidget(QFrame):
                 border-top-left-radius: 5px; 
                 border-top-right-radius: 5px;
             """)
+            if hasattr(self, 'close_btn'):
+                self.close_btn.setStyleSheet("""
+                    QPushButton { color: #00d4ff; border: none; font-weight: bold; font-size: 14px; background: transparent; }
+                    QPushButton:hover { color: #ffffff; background-color: rgba(0, 212, 255, 100); border-radius: 3px; }
+                """)
 
-    # ==========================================
-    # COLLAPSE / MINIMIZE LOGIC
-    # ==========================================
+    def close_widget(self):
+        """Smoothly fades out opacity and emits closed_signal."""
+        if self._is_closing:
+            return
+
+        effect = self.graphicsEffect()
+        if not effect or not isinstance(effect, QGraphicsOpacityEffect):
+            effect = QGraphicsOpacityEffect(self)
+            self.setGraphicsEffect(effect)
+            effect.setOpacity(1.0)
+            
+        current_op = effect.opacity()
+        if current_op <= 0.05 or not self.isVisible():
+            self._is_opening = False
+            self._is_closing = False
+            self.hide()
+            self.closed_signal.emit(self)
+            return
+
+        self._is_opening = False
+        self._is_closing = True
+
+        if hasattr(self, '_open_anim') and self._open_anim and self._open_anim.state() == QPropertyAnimation.State.Running:
+            self._open_anim.stop()
+
+        if self._close_anim and self._close_anim.state() == QPropertyAnimation.State.Running:
+            self._close_anim.stop()
+
+        self._close_anim = QPropertyAnimation(effect, b"opacity")
+        self._close_anim.setDuration(250)
+        self._close_anim.setStartValue(current_op)
+        self._close_anim.setEndValue(0.0)
+        self._close_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        def _finish():
+            self._is_closing = False
+            self.hide()
+            self.closed_signal.emit(self)
+            
+        self._close_anim.finished.connect(_finish)
+        self._close_anim.start()
+
     # ==========================================
     # COLLAPSE / MINIMIZE LOGIC
     # ==========================================
@@ -135,7 +221,15 @@ class DraggableHUDWidget(QFrame):
 
     def mouseMoveEvent(self, event):
         if self._is_dragging:
-            self.move(event.globalPosition().toPoint() - self._drag_start_pos)
+            new_pos = event.globalPosition().toPoint() - self._drag_start_pos
+            if self.parent():
+                parent_rect = self.parent().rect()
+                # Ensure at least part of the widget stays inside parent visible area
+                new_x = max(0, min(new_pos.x(), max(0, parent_rect.width() - 80)))
+                new_y = max(0, min(new_pos.y(), max(0, parent_rect.height() - 35)))
+                self.move(new_x, new_y)
+            else:
+                self.move(new_pos)
             event.accept()
 
     def mouseReleaseEvent(self, event):

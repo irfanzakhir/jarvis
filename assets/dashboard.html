@@ -4,38 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>J.A.R.V.I.S. Command Center - Core Layer</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap"></noscript>
     <style>
         :root {
             --neon: #00d4ff;
             --neon-dim: rgba(0, 212, 255, 0.2);
             --bg-dark: #050508;
-            --panel-bg: rgba(0, 10, 20, 0.6); /* Made slightly more transparent to act as a background */
-        }
-
-        body.combat-mode {
-            --neon: #ff003c;
-            --neon-dim: rgba(255, 0, 60, 0.2);
-            --bg-dark: #0a0000;
-            --panel-bg: rgba(20, 0, 0, 0.6);
+            --panel-bg: rgba(0, 10, 20, 0.6);
+            --ag-violet: #a142f4;
+            --ag-cyan: #00e5ff;
         }
 
         body {
-            margin: 0; overflow: hidden; background-color: transparent;
-            font-family: 'Share Tech Mono', monospace; color: var(--neon);
-            height: 100vh; width: 100vw;
-            transition: all 0.5s ease;
-            position: relative; /* Switch to absolute positioning for a freeform HUD */
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #050508;
+            
+            /* THE TACTICAL CYAN GRID */
+            background-image: 
+                linear-gradient(rgba(0, 212, 255, 0.07) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 212, 255, 0.07) 1px, transparent 1px);
+            background-size: 40px 40px; 
+            background-position: center center;
+            
+            transition: background-image 0.4s ease-in-out, background-color 0.4s ease-in-out;
+        }
+
+        /* PROTOCOL OMEGA: COMBAT GRID */
+        body.combat-mode {
+            background-color: rgba(10, 0, 2, 0.4);
+            background-image: 
+                linear-gradient(rgba(255, 0, 60, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 0, 60, 0.1) 1px, transparent 1px);
+        }
+
+        /* GOOGLE ANTIGRAVITY QUANTUM GRID */
+        body.antigravity-mode {
+            background-color: rgba(10, 6, 22, 0.45);
+            background-image: 
+                linear-gradient(rgba(161, 66, 244, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 229, 255, 0.06) 1px, transparent 1px);
         }
 
         /* THE ANIMATED VITALS GRAPH */
-        .panel {
+        .panel, #vitals {
+            display: none !important;
             background: var(--panel-bg); border: 1px solid var(--neon-dim);
             position: absolute; padding: 15px; display: flex; flex-direction: column;
             transition: all 0.4s ease-out; box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
             width: 300px;
-            bottom: 40px; /* Anchored to bottom right */
+            bottom: 40px; 
             right: 40px;
+            color: #ffffff;
+            font-family: 'Share Tech Mono', 'Consolas', monospace;
         }
 
         .panel::before, .panel::after {
@@ -45,26 +70,45 @@
         .panel::after { bottom: -2px; right: -2px; border-left: none; border-top: none; }
 
         .panel-header {
-            font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 2px;
+            font-family: 'Orbitron', 'Segoe UI', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 2px;
             border-bottom: 1px solid var(--neon-dim); padding-bottom: 5px; margin-bottom: 10px;
             display: flex; justify-content: space-between; flex-shrink: 0;
+            color: var(--neon);
         }
 
-        body.combat-mode .panel { box-shadow: 0 0 10px rgba(255, 0, 60, 0.5); border-color: var(--neon); }
+        body.combat-mode .panel { box-shadow: 0 0 10px rgba(255, 0, 60, 0.5); border-color: #ff003c; }
+        body.combat-mode .panel-header { color: #ff003c; border-bottom: 1px solid rgba(255, 0, 60, 0.5); }
+        body.combat-mode .panel::before, body.combat-mode .panel::after { border-color: #ff003c; }
+
+        body.antigravity-mode .panel { box-shadow: 0 0 15px rgba(161, 66, 244, 0.45); border-color: #a142f4; }
+        body.antigravity-mode .panel-header { color: #00e5ff; border-bottom: 1px solid rgba(161, 66, 244, 0.6); }
+        body.antigravity-mode .panel::before, body.antigravity-mode .panel::after { border-color: #00e5ff; }
 
         .graph-container { width: 100%; height: 60px; margin-top: 5px; border-bottom: 1px solid var(--neon-dim); border-left: 1px solid var(--neon-dim); }
+        body.combat-mode .graph-container { border-color: rgba(255, 0, 60, 0.5); }
+        body.antigravity-mode .graph-container { border-color: rgba(161, 66, 244, 0.5); }
+
+        .stat-value { color: var(--neon); font-weight: bold; }
+        body.combat-mode .stat-value { color: #ff003c; }
+        body.antigravity-mode .stat-value { color: #00e5ff; }
 
         /* THE CENTER REACTOR CORE */
         .center-core {
             position: absolute;
             top: 50%; left: 50%;
-            transform: translate(-50%, -50%); /* Perfectly centers the reactor */
-            display: flex; justify-content: center; align-items: center; 
-            z-index: -1; /* Pushes the reactor behind everything */
+            transform: translate(-50%, -50%); 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            z-index: -1; 
+            transition: all 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        .center-core.side-dock {
+            left: 200px;
+            transform: translate(-50%, -50%) scale(0.65);
         }
         
         .reactor-container {
-            position: absolute; width: 450px; height: 450px; /* Scaled up slightly for visual impact */
+            position: absolute; width: 450px; height: 450px; 
             display: flex; justify-content: center; align-items: center;
             contain: strict; isolation: isolate; 
         }
@@ -75,41 +119,117 @@
         .ring-3 { width: 380px; height: 380px; border: 2px dotted var(--neon); animation: spin 8s linear infinite; }
         .ring-4 { width: 350px; height: 350px; border: 1px solid var(--neon-dim); border-bottom: 4px solid var(--neon); animation: spin-reverse 5s linear infinite; }
         
-        body.combat-mode .ring-1 { animation-duration: 4s; }
-        body.combat-mode .ring-2 { animation-duration: 6s; }
-        body.combat-mode .ring-3 { animation-duration: 3s; }
-        body.combat-mode .ring-4 { animation-duration: 2s; }
+        body.combat-mode .ring-1 { animation-duration: 4s; border-color: rgba(255, 0, 60, 0.2); border-top-color: #ff003c; }
+        body.combat-mode .ring-2 { animation-duration: 6s; border-color: #ff003c; }
+        body.combat-mode .ring-3 { animation-duration: 3s; border-color: #ff003c; }
+        body.combat-mode .ring-4 { animation-duration: 2s; border-color: rgba(255, 0, 60, 0.2); border-bottom-color: #ff003c; }
+
+        body.antigravity-mode .ring-1 { animation-duration: 3s; border-color: rgba(161, 66, 244, 0.3); border-top-color: #a142f4; }
+        body.antigravity-mode .ring-2 { animation-duration: 4.5s; border-color: #00e5ff; }
+        body.antigravity-mode .ring-3 { animation-duration: 2.2s; border-color: #a142f4; }
+        body.antigravity-mode .ring-4 { animation-duration: 1.5s; border-color: rgba(0, 229, 255, 0.3); border-bottom-color: #00e5ff; }
 
         .core-text {
-            font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 42px; letter-spacing: 12px;
+            font-family: 'Orbitron', 'Segoe UI', sans-serif; font-weight: 900; font-size: 42px; letter-spacing: 12px;
             color: var(--neon); text-shadow: 0 0 20px var(--neon); 
             z-index: 10; position: relative; text-align: center;
-            opacity: 0.8;
+            opacity: 0.85;
+            transition: all 0.3s ease;
+        }
+        
+        body.combat-mode .core-text { color: #ff003c; text-shadow: 0 0 20px #ff003c; }
+        body.antigravity-mode .core-text { color: #00e5ff; text-shadow: 0 0 20px #a142f4, 0 0 35px #00e5ff; letter-spacing: 8px; }
+
+        .core-subtext {
+            position: relative;
+            margin-top: 10px;
+            font-family: 'Share Tech Mono', 'Consolas', monospace;
+            font-size: 11px;
+            letter-spacing: 3px;
+            color: rgba(0, 212, 255, 0.65);
+            text-align: center;
+            z-index: 10;
+            transition: all 0.3s ease;
         }
 
-        /* THE GLOBAL DEEP SEARCH OVERLAY */
-        .news-overlay {
-            position: absolute; top: -100%; left: 50%; width: 800px; max-width: 90vw; height: 65vh;
-            background: rgba(0, 5, 10, 0.98); border: 2px solid var(--neon);
-            box-shadow: 0 0 50px rgba(0,0,0,1), 0 0 30px var(--neon-dim); z-index: 9999;
-            display: flex; flex-direction: column; padding: 30px;
-            will-change: top, transform; transform: translateX(-50%) translate3d(0,0,0);
-            transition: top 0.7s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .news-overlay.active { top: 15vh; }
-        .overlay-header { font-family: 'Orbitron', sans-serif; font-size: 24px; font-weight: 900; letter-spacing: 5px; border-bottom: 2px solid var(--neon); padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; }
-        .overlay-content { flex: 1; overflow-y: auto; font-size: 16px; line-height: 1.8; -ms-overflow-style: none; scrollbar-width: none; }
-        .overlay-content::-webkit-scrollbar { display: none; }
-        .news-overlay::before, .news-overlay::after { content: ''; position: absolute; width: 30px; height: 30px; border: 3px solid var(--neon); }
-        .news-overlay::before { top: -3px; left: -3px; border-right: none; border-bottom: none; }
-        .news-overlay::after { bottom: -3px; right: -3px; border-left: none; border-top: none; }
-        body.combat-mode .news-overlay { border-color: var(--neon); box-shadow: 0 0 50px rgba(0,0,0,1), 0 0 30px rgba(255,0,60,0.5); background: rgba(10, 0, 0, 0.98);}
+        body.combat-mode .core-subtext { color: rgba(255, 0, 60, 0.8); }
+        body.antigravity-mode .core-subtext { color: #a142f4; text-shadow: 0 0 8px #a142f4; }
 
         @keyframes spin { 0% { transform: translate3d(0,0,0) rotate(0deg); } 100% { transform: translate3d(0,0,0) rotate(360deg); } }
         @keyframes spin-reverse { 0% { transform: translate3d(0,0,0) rotate(0deg); } 100% { transform: translate3d(0,0,0) rotate(-360deg); } }
+
+        /* HOLOGRAPHIC LASER SCAN BEAM */
+        .scan-beam {
+            position: fixed;
+            top: 0;
+            left: -100px;
+            width: 4px;
+            height: 100vh;
+            background: linear-gradient(180deg, 
+                rgba(0, 212, 255, 0) 0%, 
+                rgba(0, 212, 255, 0.9) 30%, 
+                #ffffff 50%, 
+                rgba(0, 212, 255, 0.9) 70%, 
+                rgba(0, 212, 255, 0) 100%);
+            box-shadow: 
+                0 0 15px rgba(0, 212, 255, 0.8),
+                0 0 30px rgba(0, 212, 255, 0.5),
+                0 0 60px rgba(0, 212, 255, 0.3);
+            pointer-events: none;
+            z-index: 99;
+            opacity: 0;
+        }
+
+        body.combat-mode .scan-beam {
+            background: linear-gradient(180deg, 
+                rgba(255, 0, 60, 0) 0%, 
+                rgba(255, 0, 60, 0.9) 30%, 
+                #ffffff 50%, 
+                rgba(255, 0, 60, 0.9) 70%, 
+                rgba(255, 0, 60, 0) 100%);
+            box-shadow: 
+                0 0 15px rgba(255, 0, 60, 0.8),
+                0 0 30px rgba(255, 0, 60, 0.5),
+                0 0 60px rgba(255, 0, 60, 0.3);
+        }
+
+        body.antigravity-mode .scan-beam {
+            background: linear-gradient(180deg, 
+                rgba(161, 66, 244, 0) 0%, 
+                rgba(0, 229, 255, 0.9) 30%, 
+                #ffffff 50%, 
+                rgba(161, 66, 244, 0.9) 70%, 
+                rgba(0, 229, 255, 0) 100%);
+            box-shadow: 
+                0 0 15px rgba(0, 229, 255, 0.8),
+                0 0 30px rgba(161, 66, 244, 0.6),
+                0 0 60px rgba(0, 229, 255, 0.4);
+        }
+
+        @keyframes scanSweep {
+            0% {
+                left: -60px;
+                opacity: 0;
+            }
+            15% {
+                opacity: 0.95;
+            }
+            85% {
+                opacity: 0.95;
+            }
+            100% {
+                left: calc(100vw + 60px);
+                opacity: 0;
+            }
+        }
+
+        .scan-beam.scanning {
+            animation: scanSweep 0.85s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
     </style>
 </head>
 <body>
+    <div class="scan-beam" id="scan-beam"></div>
 
     <div class="center-core">
         <div class="reactor-container">
@@ -118,18 +238,14 @@
             <div class="ring ring-3"></div>
             <div class="ring ring-4"></div>
         </div>
-        <div class="core-text">J.A.R.V.I.S</div>
+        <div class="core-text" id="core-label">J.A.R.V.I.S</div>
+        <div class="core-subtext" id="agent-subtext">ANTIGRAVITY SUBSYSTEM // ONLINE</div>
     </div>
 
     <div class="panel" id="vitals">
         <div class="panel-header"><span>SYSTEM VITALS</span><span>RAW</span></div>
-        <div style="margin-top:5px;">CPU CORE LOAD: <span id="cpu-text">0</span>%<canvas id="cpu-canvas" class="graph-container" width="270" height="60"></canvas></div>
-        <div style="margin-top:10px;">PHYSICAL RAM: <span id="ram-text">0</span>%<canvas id="ram-canvas" class="graph-container" width="270" height="60"></canvas></div>
-    </div>
-
-    <div class="news-overlay" id="news-overlay">
-        <div class="overlay-header"><span>GLOBAL INTEL DECRYPTED</span><span style="font-size: 16px; display: flex; align-items: center;">LIVE FEED</span></div>
-        <div class="overlay-content" id="overlay-text">PROCESSING DATA ARCHIVES...</div>
+        <div style="margin-top:5px;">CPU CORE LOAD: <span id="cpu-text" class="stat-value">0</span>%<canvas id="cpu-canvas" class="graph-container" width="270" height="60"></canvas></div>
+        <div style="margin-top:10px;">PHYSICAL RAM: <span id="ram-text" class="stat-value">0</span>%<canvas id="ram-canvas" class="graph-container" width="270" height="60"></canvas></div>
     </div>
 
 <script>
@@ -158,40 +274,89 @@
         window.ramHistory.push(ram); window.ramHistory.shift();
         document.getElementById('cpu-text').innerText = cpu; 
         document.getElementById('ram-text').innerText = ram;
-        const color = document.body.classList.contains('combat-mode') ? '#ff003c' : '#00d4ff';
+        
+        let color = '#00d4ff';
+        if (document.body.classList.contains('combat-mode')) {
+            color = '#ff003c';
+        } else if (document.body.classList.contains('antigravity-mode')) {
+            color = '#00e5ff';
+        }
         window.drawGraph('cpu-canvas', window.cpuHistory, color);
         window.drawGraph('ram-canvas', window.ramHistory, color);
     };
 
-    window.activatePanel = function(panelId, content = null) {
-        if (panelId === 'news') {
-            const overlay = document.getElementById('news-overlay');
-            if (content) {
-                let cleanContent = content.replace("[JARVIS]: ", "").replace(/\\n/g, '<br><br>').replace(/\n/g, '<br><br>');
-                document.getElementById('overlay-text').innerHTML = cleanContent;
-            }
-            overlay.classList.add('active');
-            setTimeout(() => { overlay.classList.remove('active'); }, 60000); 
-        }
-    };
-
-    // Keep this function active to dismiss the news overlay when you speak!
-    window.updateComms = function(status) {
-        if (status.includes("[USER]:")) { 
-            document.getElementById('news-overlay').classList.remove('active'); 
-        }
-    };
-
-    // Cleaned up setCombatMode to only affect the body background colors
     window.setCombatMode = function(state) {
+        const coreLabel = document.getElementById('core-label');
+        const subtext = document.getElementById('agent-subtext');
         if (state) {
+            document.body.classList.remove('antigravity-mode');
             document.body.classList.add('combat-mode');
+            if (coreLabel) coreLabel.innerText = "DEFCON 1";
+            if (subtext) subtext.innerText = "PROTOCOL OMEGA // ENGAGED";
         } else {
             document.body.classList.remove('combat-mode');
+            if (coreLabel) coreLabel.innerText = "J.A.R.V.I.S";
+            if (subtext) subtext.innerText = "ANTIGRAVITY SUBSYSTEM // ONLINE";
         }
     };
-    
-    // We completely removed updateWifi() because the Python layer handles it now!
+
+    window.setAntigravityMode = function(state, statusText) {
+        const coreLabel = document.getElementById('core-label');
+        const subtext = document.getElementById('agent-subtext');
+        if (state) {
+            document.body.classList.remove('combat-mode');
+            document.body.classList.add('antigravity-mode');
+            if (coreLabel) coreLabel.innerText = "ANTIGRAVITY";
+            if (subtext) subtext.innerText = statusText ? `COGNITIVE CORE // ${statusText.toUpperCase()}` : "COGNITIVE AGENT // ACTIVE";
+        } else {
+            document.body.classList.remove('antigravity-mode');
+            if (coreLabel) coreLabel.innerText = "J.A.R.V.I.S";
+            if (subtext) subtext.innerText = "ANTIGRAVITY SUBSYSTEM // ONLINE";
+        }
+    };
+
+    window.updateAgentTool = function(toolName) {
+        const subtext = document.getElementById('agent-subtext');
+        if (subtext) {
+            subtext.innerText = `AGENT EXECUTING // ${toolName.toUpperCase()}`;
+        }
+    };
+
+    window.setReactorDocked = function(isDocked) {
+        const core = document.querySelector('.center-core');
+        if (!core) return;
+        if (isDocked) {
+            core.classList.add('side-dock');
+        } else {
+            core.classList.remove('side-dock');
+        }
+    };
+
+    window.triggerScanSweep = function() {
+        const beam = document.getElementById('scan-beam');
+        if (!beam) return;
+        if (window._scanTimeout) {
+            clearTimeout(window._scanTimeout);
+            window._scanTimeout = null;
+        }
+        beam.classList.remove('scanning');
+        void beam.offsetWidth;
+        beam.classList.add('scanning');
+        window._scanTimeout = setTimeout(() => {
+            beam.classList.remove('scanning');
+            window._scanTimeout = null;
+        }, 900);
+    };
+
+
+    // --- DEPRECATED FUNCTIONS (Safeguards to prevent Python errors) ---
+    window.activatePanel = function(panelId, content = null) {
+        console.log("Panel request ignored: " + panelId);
+    };
+
+    window.updateComms = function(status) {
+        // Comms are now handled externally by the PyQt Draggable Widgets.
+    };
 </script>
 </body>
 </html>
