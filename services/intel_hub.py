@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import logging
 import threading
@@ -125,34 +126,96 @@ class IntelHub(QObject):
     # =========================================================================
     # NEWS INTELLIGENCE & AUTOMATIC BRIEFING
     # =========================================================================
-    def execute_news_query(self, query: str = "", auto_speak: bool = False) -> Dict[str, Any]:
+    def _parse_news_topic(self, query: str):
         """
-        Retrieves news intel safely. Offloads network fetch and synthesis to background
-        daemon thread if needed to avoid blocking Qt GUI thread.
+        Extracts (mode, search_term, display_name) from user query.
+        Modes: 'ALL', 'CATEGORY', 'TARGETED'
         """
-        q_lower = query.lower()
+        clean_q = query.strip() if query else ""
+        if not clean_q:
+            return "ALL", "ALL", "Global"
 
-        # Category specific request
-        cat = "ALL"
-        if "global" in q_lower or "world" in q_lower:
-            cat = "GLOBAL"
-        elif "national" in q_lower or "india" in q_lower:
-            cat = "NATIONAL"
-        elif "local" in q_lower or "kerala" in q_lower or "kochi" in q_lower:
-            cat = "LOCAL"
-        elif "ai" in q_lower or "tech" in q_lower:
-            cat = "TECH"
+        # Strip conversational prefixes
+        prefix_pattern = re.compile(
+            r"^(?:can\s+you\s+)?(?:tell\s+me|get|fetch|give\s+me|check|show|display|read)?\s*"
+            r"(?:the\s+)?(?:latest\s+|top\s+|live\s+)?news\s+(?:in|across|from|for|about|on|regarding)\s+",
+            re.IGNORECASE
+        )
+        sub_q = prefix_pattern.sub("", clean_q).strip()
+
+        # Check for "what's happening in <topic>"
+        what_pattern = re.compile(
+            r"^(?:(?:can\s+you\s+)?(?:check\s+|tell\s+me\s+)?what(?:'s|\s+is)\s+(?:the\s+)?(?:latest\s+)?happening in\s+)",
+            re.IGNORECASE
+        )
+        sub_q = what_pattern.sub("", sub_q).strip()
+
+        # Check for "what's the latest <topic> news"
+        latest_pattern = re.compile(
+            r"^(?:what(?:'s|\s+is)\s+the\s+latest\s+)",
+            re.IGNORECASE
+        )
+        sub_q = latest_pattern.sub("", sub_q).strip()
+
+        # Check for "headlines for/in/across <topic>"
+        headline_pattern = re.compile(
+            r"^(?:(?:can\s+you\s+)?(?:check\s+|get\s+|show\s+|tell\s+me\s+)?(?:the\s+)?headlines\s+(?:for|in|about|across|on)\s+)",
+            re.IGNORECASE
+        )
+        sub_q = headline_pattern.sub("", sub_q).strip()
+
+        # Strip remaining "news across / news in"
+        sub_q = re.sub(r"^(?:live\s+)?news\s+(?:across|in|for|about|on)\s+", "", sub_q, flags=re.IGNORECASE).strip()
+
+        # Strip leading latest / top / live
+        sub_q = re.sub(r"^(?:latest|top|live)\s+", "", sub_q, flags=re.IGNORECASE).strip()
+
+        # Strip trailing "news", "headlines", "please", punctuation
+        sub_q = re.sub(r"\s+(?:news|headlines)$", "", sub_q, flags=re.IGNORECASE).strip()
+        sub_q = re.sub(r"\s+please$", "", sub_q, flags=re.IGNORECASE).strip()
+        sub_q = re.sub(r"[?,.!]$", "", sub_q).strip()
+        sub_q = re.sub(r"\s+(?:news|headlines)$", "", sub_q, flags=re.IGNORECASE).strip()
+        sub_q = re.sub(r"\s+please$", "", sub_q, flags=re.IGNORECASE).strip()
+
+        q_lower = sub_q.lower()
+        if not q_lower or q_lower in ("all", "global situation room", "situation room"):
+            return "ALL", "ALL", "Global"
+
+        if q_lower in ("global", "world"):
+            return "CATEGORY", "GLOBAL", "Global"
+        elif q_lower in ("national", "india"):
+            return "CATEGORY", "NATIONAL", "India"
+        elif q_lower in ("local", "kerala", "kochi"):
+            display = "Kerala" if "kerala" in q_lower else ("Kochi" if "kochi" in q_lower else "Local")
+            return "TARGETED", display, display
+        elif q_lower in ("tech", "technology", "ai", "artificial intelligence"):
+            term = "AI" if ("ai" in q_lower or "artificial" in q_lower) else "Tech"
+            return "TARGETED", term, term
+        else:
+            display = sub_q.title() if len(sub_q) > 3 and not sub_q.isupper() else sub_q
+            return "TARGETED", sub_q, display
+
+    def execute_news_query(self, query: str = "", auto_speak: bool = False, sync: bool = False) -> Dict[str, Any]:
+        """
+        Retrieves targeted or global news intelligence. Supports regional topics (Kerala, Tokyo),
+        subject areas (AI, SpaceX), synchronous execution, and synchronized speech.
+        """
+        mode, cat_or_term, display_topic = self._parse_news_topic(query)
 
         def _fetch_worker():
             try:
-                if cat != "ALL":
-                    articles = self.news_service.fetch_articles(cat, limit_per_source=5)
-                    spoken = f"Here are the top headlines in {cat.lower()} intelligence: " + "; ".join([a['title'] for a in articles[:3]]) + "."
+                if mode in ("TARGETED", "CATEGORY"):
+                    articles = self.news_service.fetch_articles(cat_or_term, limit_per_source=4)
+                    if articles:
+                        spoken = f"Here are the latest headlines regarding {display_topic}: " + "; ".join([a['title'] for a in articles[:3]]) + "."
+                    else:
+                        spoken = f"I could not locate any recent news articles regarding {display_topic}, sir."
                     res = {
                         "action": "category",
-                        "category": cat,
+                        "category": display_topic,
                         "articles": articles,
-                        "spoken": spoken
+                        "spoken": spoken,
+                        "spoken_text": spoken
                     }
                     self.news_updated.emit(res)
                     if auto_speak and self.mouth_ref:
@@ -168,21 +231,30 @@ class IntelHub(QObject):
                     res = {
                         "action": "briefing",
                         "briefing": briefing,
-                        "spoken": self.current_briefing_text
+                        "spoken": self.current_briefing_text,
+                        "spoken_text": self.current_briefing_text
                     }
                     self.news_updated.emit(res)
                     if auto_speak and self.mouth_ref:
                         self.play_news_briefing(delay=1.5)
                     return res
+            except RuntimeError as re:
+                if "deleted" in str(re).lower():
+                    logger.debug(f"[NEWS SERVICE / INTEL HUB] Receiver destroyed during fetch: {re}")
+                    return {}
+                logger.error(f"[NEWS SERVICE / INTEL HUB] News query runtime fault: {re}", exc_info=True)
+                return {}
             except Exception as e:
                 logger.error(f"[NEWS SERVICE / INTEL HUB] News query fault: {e}", exc_info=True)
                 return {}
 
-        cat_key = cat.upper()
-        if cat_key in self.news_service.cache:
+        if sync:
+            return _fetch_worker()
+
+        cache_key = cat_or_term.upper()
+        if cache_key in self.news_service.cache:
             return _fetch_worker()
         else:
-            # Run in worker thread to prevent Qt event pump deadlock
             t = threading.Thread(target=_fetch_worker, daemon=True)
             t.start()
             return {"action": "fetching", "status": "background"}

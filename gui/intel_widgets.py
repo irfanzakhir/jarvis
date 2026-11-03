@@ -377,7 +377,11 @@ class LiveNewsHUDWidget(QWidget):
         elif action == "category":
             articles = data.get("articles", [])
             cat = data.get("category", "INTEL")
-            self.briefing_text.setText(f"Displaying {len(articles)} validated reports for {cat} intelligence.")
+            spoken = data.get("spoken", "")
+            if spoken:
+                self.briefing_text.setText(spoken)
+            else:
+                self.briefing_text.setText(f"AI BRIEFING // {cat.upper()}: Displaying {len(articles)} validated reports.")
             self._populate_articles(articles)
 
     def _populate_preview_articles(self):
@@ -521,9 +525,18 @@ class AtmosphericParticleCanvas(QWidget):
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._update_animation)
-        self.timer.start(40) # 25 FPS lightweight animation
 
         self.setFixedHeight(88)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if hasattr(self, 'timer') and not self.timer.isActive():
+            self.timer.start(40) # 25 FPS lightweight animation
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
 
     def set_theme(self, theme: str):
         self.theme = theme.lower()
@@ -995,8 +1008,17 @@ class AudioSpectrumHUDWidget(QWidget):
         self.phase = 0.0
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._animate_spectrum)
-        self.timer.start(40)  # 25 FPS
         self._init_ui()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if hasattr(self, 'timer') and not self.timer.isActive():
+            self.timer.start(40)  # 25 FPS
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
 
     def _init_ui(self):
         layout = QVBoxLayout(self)

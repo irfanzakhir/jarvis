@@ -4,6 +4,7 @@ import json
 import time
 import logging
 import requests
+import urllib.parse
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional, Any
 
@@ -87,9 +88,10 @@ class NewsService:
             sources_to_query = {category_upper: self.FEED_SOURCES[category_upper]}
         else:
             # Query-based search
+            encoded_query = urllib.parse.quote_plus(category)
             sources_to_query = {
                 category_upper: [
-                    (f"Search: {category}", f"https://news.google.com/rss/search?q={category}&hl=en-IN&gl=IN&ceid=IN:en")
+                    (f"Search: {category}", f"https://news.google.com/rss/search?q={encoded_query}&hl=en-IN&gl=IN&ceid=IN:en")
                 ]
             }
 
@@ -321,3 +323,30 @@ class NewsService:
             "timestamp": time.time(),
             "formatted_time": time.strftime("%H:%M // %d %b %Y")
         }
+
+    def generate_targeted_briefing(self, query: str, limit: int = 4) -> Dict[str, Any]:
+        """
+        Synthesizes a targeted news briefing for a specific location or topic.
+        Returns:
+            - articles: List of matching news articles.
+            - spoken_text: Formatted spoken response string.
+            - spoken: Alias for spoken_text.
+        """
+        clean_q = query.strip()
+        articles = self.fetch_articles(clean_q, limit_per_source=limit)
+
+        if articles:
+            summaries = "; ".join([a['title'] for a in articles[:limit]])
+            spoken = f"Here are the latest headlines regarding {clean_q}: {summaries}."
+        else:
+            spoken = f"I could not locate any recent news articles regarding {clean_q}, sir."
+
+        return {
+            "query": clean_q,
+            "articles": articles,
+            "spoken_text": spoken,
+            "spoken": spoken,
+            "timestamp": time.time(),
+            "formatted_time": time.strftime("%H:%M // %d %b %Y")
+        }
+

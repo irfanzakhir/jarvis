@@ -862,7 +862,13 @@ class JarvisBrain:
                             if "news" in query_str.lower():
                                 decision["ui_action"] = "show_widget"
                                 decision["target"] = "news"
-                                decision["spoken_response"] = "Deploying Global Situation Room intel widget, sir."
+                                decision["news_query"] = query_str
+                                try:
+                                    from services.intel_hub import IntelHub
+                                    res = IntelHub().execute_news_query(query_str, auto_speak=False, sync=True)
+                                    decision["spoken_response"] = res.get("spoken", f"Accessing news intelligence for {query_str}, sir.")
+                                except Exception:
+                                    decision["spoken_response"] = f"Accessing news intelligence for {query_str}, sir."
                             elif "weather" in query_str.lower():
                                 decision["ui_action"] = "show_widget"
                                 decision["target"] = "weather"
@@ -878,6 +884,18 @@ class JarvisBrain:
                         elif func_name == "open_situation_room":
                             decision["ui_action"] = "show_widget"
                             decision["target"] = "news"
+                            custom_q = args.get("custom_query", "")
+                            layer = args.get("layer", "")
+                            topic = custom_q if custom_q else (layer if layer not in ("ALL", "") else "")
+                            if topic:
+                                decision["news_query"] = topic
+                                try:
+                                    from services.intel_hub import IntelHub
+                                    res = IntelHub().execute_news_query(topic, auto_speak=False, sync=True)
+                                    if res.get("spoken"):
+                                        decision["spoken_response"] = res["spoken"]
+                                except Exception:
+                                    pass
                             if not decision["spoken_response"]:
                                 decision["spoken_response"] = args.get("spoken_response", "Deploying Global Situation Room intel widget, sir.")
                              

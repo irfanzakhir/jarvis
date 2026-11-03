@@ -188,8 +188,12 @@ class JarvisRouter:
             r"\b(?:what(?:'s|\s+is)\s+the\s+weather|how(?:'s|\s+is)\s+the\s+weather)(?:\s+(?:today|tomorrow|in\s+([a-zA-Z\s]+)))?\b",
             re.IGNORECASE
         )
-        self._news_topic = re.compile(
-            r"\b(?:what(?:'s|\s+is)\s+happening in\s+(ai|tech|technology|india|the world|the economy|business)|latest\s+(ai|tech|global|national|local)\s+news)\b",
+        self._news_query = re.compile(
+            r"\b(?:(?:can\s+you\s+)?(?:tell\s+me|get|fetch|give\s+me|check|show|display|read)\s+)?(?:the\s+)?(?:latest\s+|top\s+|live\s+)?news\s+(?:in|across|from|for|about|on|regarding)\s+(.+?)(?:\s+please)?$",
+            re.IGNORECASE
+        )
+        self._news_topic_named = re.compile(
+            r"\b(?:what(?:'s|\s+is)\s+(?:the\s+)?(?:latest\s+)?happening in\s+(.+?)(?:\s+please)?$|(?:what(?:'s|\s+is)\s+the\s+)?latest\s+([a-zA-Z0-9_\s]+)\s+(?:news|headlines)|([a-zA-Z0-9_\s]+)\s+(?:news|headlines)|(?:the\s+)?headlines\s+(?:for|in|across|about|on)\s+(.+?)(?:\s+please)?$)\b",
             re.IGNORECASE
         )
         self._check_calendar = re.compile(
@@ -403,6 +407,39 @@ class JarvisRouter:
             }
 
 
+
+        # Regional & Topic News Intelligence Hot-Path (<1ms)
+        news_topic = None
+        nq_m = self._news_query.search(eval_text) or self._news_query.search(cleaned)
+        if nq_m:
+            candidate = nq_m.group(1).strip()
+            if candidate.lower() not in ("widget", "intel", "component", "room"):
+                news_topic = candidate
+        else:
+            nt_m = self._news_topic_named.search(eval_text) or self._news_topic_named.search(cleaned)
+            if nt_m:
+                candidate = (nt_m.group(1) or nt_m.group(2) or nt_m.group(3) or (nt_m.group(4) if len(nt_m.groups()) >= 4 else None) or "").strip()
+                cand_lower = candidate.lower()
+                cmd_verbs = {"open", "show", "launch", "reveal", "hide", "close", "dismiss", "widget", "intel", "component", "the"}
+                if cand_lower not in cmd_verbs:
+                    if not any(eval_text.lower().startswith(v) and any(w in eval_text.lower() for w in ["news", "headline"]) for v in ["open news", "show news", "hide news", "close news", "dismiss news"]):
+                        news_topic = candidate
+
+        if news_topic:
+            news_topic = re.sub(r"\s+please$", "", news_topic, flags=re.IGNORECASE).strip("?.,! ")
+            if news_topic.lower() == "ai":
+                news_topic = "AI"
+            elif len(news_topic) > 2 and not news_topic.isupper():
+                news_topic = news_topic.title()
+            res = IntelHub().execute_news_query(news_topic, auto_speak=False, sync=True)
+            spoken = res.get("spoken", f"Fetching latest news regarding {news_topic}, sir.")
+            return {
+                "intercepted": True,
+                "spoken_response": spoken,
+                "ui_action": "show_widget",
+                "target": "news",
+                "news_query": news_topic
+            }
 
         # Google Calendar Synchronization & Meetings Hot-Path (<1ms)
         if self._check_calendar.search(cleaned) or self._check_calendar.search(eval_text):

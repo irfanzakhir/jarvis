@@ -74,7 +74,16 @@ class FloatingOrb(QWidget):
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.animate_frame)
-        self.timer.start(25) # ~40 FPS, <1% CPU footprint
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if hasattr(self, 'timer') and not self.timer.isActive():
+            self.timer.start(25) # ~40 FPS, <1% CPU footprint
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
 
     def set_active(self, state):
         self.is_active = bool(state)
@@ -344,7 +353,20 @@ class JarvisHUD(QMainWindow):
         self.dashboard = QWebEngineView(self)
         self.dashboard.setGeometry(0, 0, screen.width(), screen.height())
         
-        self.ram_profile = QWebEngineProfile("", self.dashboard)
+        cache_root = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Jarvis_OS", "web_cache")
+        storage_path = os.path.join(cache_root, "storage")
+        http_cache_path = os.path.join(cache_root, "cache")
+        try:
+            os.makedirs(storage_path, exist_ok=True)
+            os.makedirs(http_cache_path, exist_ok=True)
+        except Exception:
+            pass
+        if not hasattr(JarvisHUD, "_shared_profile") or JarvisHUD._shared_profile is None:
+            JarvisHUD._shared_profile = QWebEngineProfile("jarvis_profile", QApplication.instance())
+            JarvisHUD._shared_profile.setPersistentStoragePath(storage_path)
+            JarvisHUD._shared_profile.setCachePath(http_cache_path)
+            JarvisHUD._shared_profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.DiskHttpCache)
+        self.ram_profile = JarvisHUD._shared_profile
         self.ram_page = QWebEnginePage(self.ram_profile, self.dashboard)
         self.dashboard.setPage(self.ram_page)
         
@@ -502,8 +524,7 @@ class JarvisHUD(QMainWindow):
         # Native Atmospheric Weather Radar Widget (Dynamic Atmospheric Canvas)
         self.weather_widget = DraggableHUDWidget("ATMOSPHERIC WEATHER RADAR", parent=self)
         self.weather_widget.setFixedSize(400, 310)
-        self.weather_intel_view = DynamicWeatherHUDWidget(self.weather_widget)
-        self.weather_widget.content_layout.addWidget(self.weather_intel_view)
+        self._weather_intel_view = None
         self.weather_label = QLabel()
         self.weather_label.hide()
         self.weather_widget.move(screen.width() - 640, 45)
@@ -512,8 +533,7 @@ class JarvisHUD(QMainWindow):
         # Native Global Situation Room (Live AI News Intelligence) Widget
         self.news_widget = DraggableHUDWidget("GLOBAL SITUATION ROOM", parent=self)
         self.news_widget.setFixedSize(420, 330)
-        self.news_intel_view = LiveNewsHUDWidget(self.news_widget)
-        self.news_widget.content_layout.addWidget(self.news_intel_view)
+        self._news_intel_view = None
         self.news_label = QLabel()
         self.news_label.hide()
         self.news_widget.move(screen.width() - 640, 365)
@@ -522,7 +542,7 @@ class JarvisHUD(QMainWindow):
         # Native Tactical Map Recon Widget (Interactive Leaflet Map Recon) - Deferred instantiation
         self.map_widget = DraggableHUDWidget("TACTICAL MAP RECON", parent=self)
         self.map_widget.setFixedSize(460, 340)
-        self.map_intel_view = None  # Created lazily on first reveal/demand to prevent dual WebEngine cold boot
+        self._map_intel_view = None  # Created lazily on first reveal/demand to prevent dual WebEngine cold boot
         self.map_label = QLabel()
         self.map_label.hide()
         self.map_widget.move(screen.width() - 640, 705)
@@ -531,24 +551,21 @@ class JarvisHUD(QMainWindow):
         # Native Acoustic Spectrum & Vocal Processing Core
         self.audio_widget = DraggableHUDWidget("ACOUSTIC SPECTRUM & VOCAL CORE", parent=self)
         self.audio_widget.setFixedSize(360, 165)
-        self.audio_intel_view = AudioSpectrumHUDWidget(self.audio_widget)
-        self.audio_widget.content_layout.addWidget(self.audio_intel_view)
+        self._audio_intel_view = None
         self.audio_widget.move(screen.width() - 640, 150)
         self.audio_widget.hide()
 
         # Native Cognitive Memory Vault & Vector Telemetry
         self.memory_widget = DraggableHUDWidget("COGNITIVE MEMORY VAULT", parent=self)
         self.memory_widget.setFixedSize(360, 175)
-        self.memory_intel_view = CognitiveMemoryHUDWidget(self.memory_widget)
-        self.memory_widget.content_layout.addWidget(self.memory_intel_view)
+        self._memory_intel_view = None
         self.memory_widget.move(screen.width() - 640, 330)
         self.memory_widget.hide()
 
         # Native Hardware Health & Thermal Matrix
         self.hardware_widget = DraggableHUDWidget("HARDWARE HEALTH & THERMAL MATRIX", parent=self)
         self.hardware_widget.setFixedSize(360, 175)
-        self.hardware_intel_view = HardwareHealthHUDWidget(self.hardware_widget)
-        self.hardware_widget.content_layout.addWidget(self.hardware_intel_view)
+        self._hardware_intel_view = None
         self.hardware_widget.move(screen.width() - 640, 520)
         self.hardware_widget.hide()
 
@@ -681,7 +698,7 @@ class JarvisHUD(QMainWindow):
         if text.strip():
             self.text_command_signal.emit(text) 
         self.cmd_input.clear()
-        self.dashboard.setFocus()
+        self.cmd_input.setFocus()
         
     def toggle_mic(self):
         is_muted = self.mic_btn.isChecked()
@@ -807,10 +824,14 @@ class JarvisHUD(QMainWindow):
 
     def update_text(self, data):
         if not data: return
-        log_text = data.get('log', '')
-        action = data.get('action')
+        if isinstance(data, str):
+            log_text = data
+            action = None
+        else:
+            log_text = data.get('log', '')
+            action = data.get('action')
         
-        if log_text and ("USER" in log_text or "JARVIS" in log_text or "SYSTEM" in log_text or "[WARNING]" in log_text or "[CRITICAL]" in log_text):
+        if log_text and ("USER" in log_text or "JARVIS" in log_text or "SYSTEM" in log_text or "[WARNING]" in log_text or "[CRITICAL]" in log_text or "[INIT]" in log_text or ">>" in log_text):
             self.log_output.append(log_text)
             self.log_output.verticalScrollBar().setValue(self.log_output.verticalScrollBar().maximum())
         
@@ -917,7 +938,7 @@ class JarvisHUD(QMainWindow):
             if hasattr(self, 'events_label'):
                 self.events_label.setText(f"CALENDAR: SYNCHRONIZED\n{cal_msg[:70]}")
         elif action == 'show_widget':
-            self.reveal_widget_with_scan(data.get('target', ''))
+            self.reveal_widget_with_scan(data.get('target', ''), query=data.get('query', ''))
         elif action == 'hide_widget':
             self.dismiss_widget(data.get('target', ''))
         elif action == 'recenter_reactor':
@@ -961,9 +982,14 @@ class JarvisHUD(QMainWindow):
             except Exception:
                 pass
 
-    def update_news_intel(self):
+    def update_news_intel(self, query="", auto_speak=False):
         """Loads situation room headlines, updates LiveNewsHUDWidget, and triggers briefing."""
-        IntelHub().execute_news_query("", auto_speak=True)
+        IntelHub().execute_news_query(query, auto_speak=auto_speak)
+        if hasattr(self, 'news_widget') and hasattr(self.news_widget, 'title_label'):
+            if query:
+                self.news_widget.title_label.setText(f"SITUATION ROOM // {query.upper()} INTEL")
+            else:
+                self.news_widget.title_label.setText("GLOBAL SITUATION ROOM")
         if not hasattr(self, 'news_label'):
             return
         cache_path = resource_path("news_cache.json")
@@ -984,11 +1010,101 @@ class JarvisHUD(QMainWindow):
             except Exception:
                 pass
 
+    def _ensure_weather_intel_view(self):
+        """Lazily instantiates the Dynamic Atmospheric Weather view on first demand."""
+        if self._weather_intel_view is None:
+            self._weather_intel_view = DynamicWeatherHUDWidget(self.weather_widget)
+            self.weather_widget.content_layout.addWidget(self._weather_intel_view)
+
+    def _ensure_news_intel_view(self):
+        """Lazily instantiates the Live News Situation Room view on first demand."""
+        if self._news_intel_view is None:
+            self._news_intel_view = LiveNewsHUDWidget(self.news_widget)
+            self.news_widget.content_layout.addWidget(self._news_intel_view)
+
     def _ensure_map_intel_view(self):
         """Lazily instantiates the Tactical Map WebEngine view on first demand."""
-        if self.map_intel_view is None:
-            self.map_intel_view = TacticalMapHUDWidget(self.map_widget)
-            self.map_widget.content_layout.addWidget(self.map_intel_view)
+        if self._map_intel_view is None:
+            self._map_intel_view = TacticalMapHUDWidget(self.map_widget)
+            self.map_widget.content_layout.addWidget(self._map_intel_view)
+
+    def _ensure_audio_intel_view(self):
+        """Lazily instantiates the Acoustic Spectrum & Vocal Core view on first demand."""
+        if self._audio_intel_view is None:
+            self._audio_intel_view = AudioSpectrumHUDWidget(self.audio_widget)
+            self.audio_widget.content_layout.addWidget(self._audio_intel_view)
+
+    def _ensure_memory_intel_view(self):
+        """Lazily instantiates the Cognitive Memory Vault view on first demand."""
+        if self._memory_intel_view is None:
+            self._memory_intel_view = CognitiveMemoryHUDWidget(self.memory_widget)
+            self.memory_widget.content_layout.addWidget(self._memory_intel_view)
+
+    def _ensure_hardware_intel_view(self):
+        """Lazily instantiates the Hardware Health & Thermal Matrix view on first demand."""
+        if self._hardware_intel_view is None:
+            self._hardware_intel_view = HardwareHealthHUDWidget(self.hardware_widget)
+            self.hardware_widget.content_layout.addWidget(self._hardware_intel_view)
+
+    @property
+    def weather_intel_view(self):
+        if self._weather_intel_view is None:
+            self._ensure_weather_intel_view()
+        return self._weather_intel_view
+
+    @weather_intel_view.setter
+    def weather_intel_view(self, val):
+        self._weather_intel_view = val
+
+    @property
+    def news_intel_view(self):
+        if self._news_intel_view is None:
+            self._ensure_news_intel_view()
+        return self._news_intel_view
+
+    @news_intel_view.setter
+    def news_intel_view(self, val):
+        self._news_intel_view = val
+
+    @property
+    def map_intel_view(self):
+        if self._map_intel_view is None:
+            self._ensure_map_intel_view()
+        return self._map_intel_view
+
+    @map_intel_view.setter
+    def map_intel_view(self, val):
+        self._map_intel_view = val
+
+    @property
+    def audio_intel_view(self):
+        if self._audio_intel_view is None:
+            self._ensure_audio_intel_view()
+        return self._audio_intel_view
+
+    @audio_intel_view.setter
+    def audio_intel_view(self, val):
+        self._audio_intel_view = val
+
+    @property
+    def memory_intel_view(self):
+        if self._memory_intel_view is None:
+            self._ensure_memory_intel_view()
+        return self._memory_intel_view
+
+    @memory_intel_view.setter
+    def memory_intel_view(self, val):
+        self._memory_intel_view = val
+
+    @property
+    def hardware_intel_view(self):
+        if self._hardware_intel_view is None:
+            self._ensure_hardware_intel_view()
+        return self._hardware_intel_view
+
+    @hardware_intel_view.setter
+    def hardware_intel_view(self, val):
+        self._hardware_intel_view = val
 
     def update_map_intel(self, location="EDAKKUNNAM"):
         """Updates tactical map recon coordinates and syncs with TacticalMapHUDWidget."""
@@ -1171,6 +1287,11 @@ class JarvisHUD(QMainWindow):
 
     def _pop_in_boot_widget(self, widget):
         """Crisply pops in a boot widget with fast-paced opacity and position easing."""
+        if widget == self.weather_widget:
+            self._ensure_weather_intel_view()
+        elif widget == self.hardware_widget:
+            self._ensure_hardware_intel_view()
+
         eff = widget.graphicsEffect()
         if not eff or not isinstance(eff, QGraphicsOpacityEffect):
             eff = QGraphicsOpacityEffect(widget)
@@ -1284,7 +1405,7 @@ class JarvisHUD(QMainWindow):
             return "map"
         return k
 
-    def reveal_widget_with_scan(self, widget_key):
+    def reveal_widget_with_scan(self, widget_key, query=""):
         """Triggers laser scan sweep, docks reactor to side, and fades in requested widget."""
         if not self.isVisible():
             self.restore_from_orb()
@@ -1304,13 +1425,24 @@ class JarvisHUD(QMainWindow):
         if not targets:
             return
 
-        if norm_key in ("weather", "all"):
+        if norm_key in ("weather", "all") or self.weather_widget in targets:
+            self._ensure_weather_intel_view()
             self.update_weather_intel()
-        if norm_key in ("news", "all"):
-            self.update_news_intel()
+        if norm_key in ("news", "all") or self.news_widget in targets:
+            self._ensure_news_intel_view()
+            if norm_key == "news" and hasattr(self, 'news_widget') and self.news_widget.isVisible():
+                self.update_news_intel(query=query, auto_speak=False)
+                return
+            self.update_news_intel(query=query, auto_speak=False)
         if norm_key in ("map", "all") or self.map_widget in targets:
             self._ensure_map_intel_view()
             self.update_map_intel()
+        if norm_key in ("audio", "all") or self.audio_widget in targets:
+            self._ensure_audio_intel_view()
+        if norm_key in ("memory", "all") or self.memory_widget in targets:
+            self._ensure_memory_intel_view()
+        if norm_key in ("hardware", "all") or self.hardware_widget in targets:
+            self._ensure_hardware_intel_view()
 
         # Keep persistence memory updated
         if hasattr(self, '_visible_widgets_before_min'):
