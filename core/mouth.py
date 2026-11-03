@@ -31,6 +31,8 @@ class JarvisMouth:
     def _prewarm_cache(self):
         """Asynchronously pre-synthesizes high-frequency system phrases into RAM concurrently."""
         common_phrases = [
+            "System locked. Awaiting biometric authentication.",
+            "Good to see you, sir. Importing preferences from home interface.",
             "Standing by. Optical sensors armed, sir.",
             "Standing by, sir.",
             "Scanning active display visual telemetry now, sir.",

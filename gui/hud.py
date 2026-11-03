@@ -4,6 +4,9 @@ import os
 import json
 import math
 import random
+import threading
+import logging
+logger = logging.getLogger("JarvisHUD")
 from PyQt6.QtWidgets import QMainWindow, QApplication, QPushButton, QSystemTrayIcon, QMenu, QStyle, QWidget, QTextEdit, QLabel, QLineEdit, QHBoxLayout
 from PyQt6.QtGui import (
     QColor, QAction, QPainter, QPen, QBrush, QKeySequence, QShortcut,
@@ -572,6 +575,11 @@ class JarvisHUD(QMainWindow):
         # Active center-focus & resting dock memory tracking
         self.active_centered_widget = None
         self.widget_resting_positions = {}
+        self.boot_screen = None
+        self.boot_screen_finished = threading.Event()
+        self.chime_cmd_path = resource_path(os.path.join("assets", "chimes", "chime_cmd.wav"))
+        self.chime_log_path = resource_path(os.path.join("assets", "chimes", "chime_log.wav"))
+        self.chime_telem_path = resource_path(os.path.join("assets", "chimes", "chime_telem.wav"))
 
         IntelHub().bind_core_references(hud=self)
 
@@ -837,6 +845,8 @@ class JarvisHUD(QMainWindow):
         
         if action == 'cinematic_boot':
             self.execute_cinematic_boot()
+        elif action == 'reveal_home_preferences':
+            self.reveal_home_preferences_sequence()
             
         if action == 'update_wifi':
             wifi_data = data.get('data', {})
@@ -1254,36 +1264,147 @@ class JarvisHUD(QMainWindow):
 
         self._visible_widgets_before_min = []
 
-    def execute_cinematic_boot(self):
-        """Fires the boot sound and starts the fast-paced staggered reveal for the 7 boot widgets timed to jarvis_boot.wav, then hides everything."""
-        sound_path = resource_path(os.path.join('assets', 'jarvis_boot.wav'))
-        if os.path.exists(sound_path):
-            winsound.PlaySound(sound_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
-        else:
-            print("[SYSTEM WARNING]: 'assets/jarvis_boot.wav' missing. Skipping audio.")
+    def play_widget_chime(self, chime_type="cmd"):
+        """Plays an asynchronous electronic chime/beep sound for widget pop-in."""
+        path_map = {
+            "cmd": getattr(self, "chime_cmd_path", None),
+            "log": getattr(self, "chime_log_path", None),
+            "telem": getattr(self, "chime_telem_path", None)
+        }
+        target_path = path_map.get(chime_type) or getattr(self, "chime_cmd_path", None)
+        if target_path and os.path.exists(target_path):
+            try:
+                winsound.PlaySound(target_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+            except Exception:
+                pass
 
+    def execute_cinematic_boot(self):
+        """Launches the full-screen cinematic boot sequence from boot_sequence.py."""
+        from boot_sequence import JarvisBootScreen
+        if hasattr(self, 'boot_screen') and self.boot_screen is not None:
+            try:
+                self.boot_screen.close()
+            except Exception:
+                pass
+
+        # Prepare underlying HUD state: Cyan theme, centered Arc Reactor, all widgets hidden
+        self.orb.combat_mode = False
+        self.orb.antigravity_mode = False
+        if self.page_loaded and hasattr(self, 'dashboard'):
+            self.dashboard.page().runJavaScript("setCombatMode(false);")
+            self.dashboard.page().runJavaScript("setAntigravityMode(false);")
+        self.recenter_reactor()
+
+        for w in self.all_hud_widgets:
+            w.hide()
+            eff = w.graphicsEffect()
+            if eff and isinstance(eff, QGraphicsOpacityEffect):
+                eff.setOpacity(0.0)
+
+        self.boot_screen_finished.clear()
+        self.boot_screen = JarvisBootScreen(on_complete_callback=self.on_boot_screen_completed)
+        self.boot_screen.showFullScreen()
+
+    def on_boot_screen_completed(self):
+        """Invoked when JarvisBootScreen completes its 4.2s sequence."""
+        logger.info("[HUD]: Cinematic boot sequence completed. Smooth transition to default Cyan Arc Reactor on black grid.")
+        self.orb.combat_mode = False
+        self.orb.antigravity_mode = False
+        if self.page_loaded and hasattr(self, 'dashboard'):
+            self.dashboard.page().runJavaScript("setCombatMode(false);")
+            self.dashboard.page().runJavaScript("setAntigravityMode(false);")
+        self.recenter_reactor()
+
+        # Ensure all widgets remain strictly hidden until preference reveal
+        for w in self.all_hud_widgets:
+            w.hide()
+            eff = w.graphicsEffect()
+            if eff and isinstance(eff, QGraphicsOpacityEffect):
+                eff.setOpacity(0.0)
+
+        # Notify waiting threads / worker
+        self.boot_screen_finished.set()
+
+    def reveal_home_preferences_sequence(self):
+        """
+        Reveals:
+          1. Command typing widget (MANUAL OVERRIDE UPLINK) with Chime 1
+          2. Neural activity log (NEURAL ACTIVITY LOG) with Chime 2
+          3. System telemetry widget (SYSTEM TELEMETRY) with Chime 3
+        one by one with electronic chime sound effects, while keeping all other widgets hidden,
+        and smoothly docks the Arc Reactor to the side (smaller scale, slides left).
+        """
+        logger.info("[HUD]: Importing preferences: docking Arc Reactor and revealing core 3 widgets.")
+        
+        # 1. Dock the Arc Reactor to the side (shrinks and slides to the left bay)
+        self.reactor_docked = True
+        if self.page_loaded and hasattr(self, 'dashboard'):
+            self.dashboard.page().runJavaScript("triggerScanSweep();")
+            self.dashboard.page().runJavaScript("setReactorDocked(true);")
+
+        # 2. Establish layout positions
         self.auto_layout_boot_widgets()
 
-        for w in self.boot_widgets:
-            eff = w.graphicsEffect()
-            if not eff or not isinstance(eff, QGraphicsOpacityEffect):
-                eff = QGraphicsOpacityEffect(w)
-                w.setGraphicsEffect(eff)
-            eff.setOpacity(0.0)
+        # 3. Ensure all non-core widgets are hidden
+        core_3 = [self.command_widget, self.log_widget, self.telemetry_widget]
+        for w in self.all_hud_widgets:
+            if w not in core_3:
+                w.hide()
+                eff = w.graphicsEffect()
+                if eff and isinstance(eff, QGraphicsOpacityEffect):
+                    eff.setOpacity(0.0)
 
-        # Precise fast-paced timing synchronized to jarvis_boot.wav waveform
-        chime_delays = [250, 600, 1000, 1400, 1800, 2200, 2650]
-        for w, delay in zip(self.boot_widgets, chime_delays):
-            QTimer.singleShot(delay, lambda target=w: self._pop_in_boot_widget(target))
+        # 4. Staggered reveal sequence with electronic chimes
+        stagger_plan = [
+            (self.command_widget, 350, "cmd"),
+            (self.log_widget, 950, "log"),
+            (self.telemetry_widget, 1550, "telem")
+        ]
 
-        # Completion chord at 4.3s: announce nominal status, trigger scan sweep, and hide everything
-        def _on_boot_complete():
-            if self.page_loaded and hasattr(self, 'dashboard'):
-                self.dashboard.page().runJavaScript("if (typeof triggerScanSweep === 'function') triggerScanSweep();")
-            print("[SYSTEM]: Boot audio sequence completed. HUD Nominal. Collapsing peripheral widgets to core.")
-            self.collapse_to_reactor_core()
+        for widget, delay, chime_type in stagger_plan:
+            QTimer.singleShot(delay, lambda w=widget, c=chime_type: self._pop_in_preference_widget(w, c))
 
-        QTimer.singleShot(4300, _on_boot_complete)
+        # Focus command input after final widget pops in
+        def _focus_input():
+            if hasattr(self, 'cmd_input'):
+                self.cmd_input.setFocus()
+        QTimer.singleShot(1800, _focus_input)
+
+    def _pop_in_preference_widget(self, widget, chime_type="cmd"):
+        """Pops in a preference widget with high-tech chime and smooth ease-out opacity/motion."""
+        self.play_widget_chime(chime_type)
+
+        eff = widget.graphicsEffect()
+        if not eff or not isinstance(eff, QGraphicsOpacityEffect):
+            eff = QGraphicsOpacityEffect(widget)
+            widget.setGraphicsEffect(eff)
+
+        resting_pos = self.widget_resting_positions.get(widget, widget.pos())
+        pop_start_pos = QPoint(resting_pos.x(), resting_pos.y() + 10)
+        widget.move(pop_start_pos)
+        widget.show()
+        widget.raise_()
+
+        anim_pos = QPropertyAnimation(widget, b"pos")
+        anim_pos.setDuration(280)
+        anim_pos.setStartValue(pop_start_pos)
+        anim_pos.setEndValue(resting_pos)
+        anim_pos.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        anim_op = QPropertyAnimation(eff, b"opacity")
+        anim_op.setDuration(280)
+        anim_op.setStartValue(0.0)
+        anim_op.setEndValue(1.0)
+        anim_op.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        self.active_animations.extend([anim_pos, anim_op])
+        def _cleanup(a1=anim_pos, a2=anim_op):
+            if a1 in self.active_animations: self.active_animations.remove(a1)
+            if a2 in self.active_animations: self.active_animations.remove(a2)
+        anim_op.finished.connect(_cleanup)
+
+        anim_pos.start()
+        anim_op.start()
 
     def _pop_in_boot_widget(self, widget):
         """Crisply pops in a boot widget with fast-paced opacity and position easing."""

@@ -245,13 +245,14 @@ class _MouthProxy:
 class JarvisWorker(QThread):
     status_signal = pyqtSignal(dict)
 
-    def __init__(self, ears, brain, mouth, automation, security):
+    def __init__(self, ears, brain, mouth, automation, security, hud=None):
         super().__init__()
         self.ears = ears
         self.brain = brain
         self.mouth = _MouthProxy(mouth, self)
         self.automation = automation
-        self.security = security 
+        self.security = security
+        self.hud = hud
         self.is_mic_muted = False
         
         self.command_queue = queue.Queue()
@@ -436,32 +437,26 @@ class JarvisWorker(QThread):
         while self.system_locked:
             time.sleep(0.1)
         
+        # Wait for the cinematic boot screen to finish its 4.2s sequence and transition to cyan Arc Reactor
+        if self.hud and hasattr(self.hud, 'boot_screen_finished'):
+            self.hud.boot_screen_finished.wait(timeout=5.5)
+        else:
+            time.sleep(4.2)
+
         # Ensure event engine is running safely without dropping workspace_bridge
         if not hasattr(self, 'event_engine') or not self.event_engine.is_alive():
             self.event_engine = EventEngine(self.command_queue, workspace_bridge=self.workspace)
             self.event_engine.start()
 
-            
-        boot_logs = [
-            "[INIT]: POWER ON SELF TEST...",
-            "[INIT]: MOUNTING LOCAL STORAGE...",
-            "[INIT]: CALIBRATING OPTICAL ARRAY...",
-            "[INIT]: ESTABLISHING SECURE UPLINK...",
-            "[INIT]: NEURAL NETWORK ONLINE.",
-            ">> J.A.R.V.I.S. SYSTEM FULLY OPERATIONAL."
-        ]
-        for log in boot_logs:
-            self.status_signal.emit({"log": log})
-            if not self.command_queue.empty():
-                time.sleep(0.05)
-            else:
-                time.sleep(0.6)
+        # Emit preference reveal action (docks Arc Reactor to side and reveals command, log, telemetry widgets with chimes)
+        self.status_signal.emit({"log": ">> J.A.R.V.I.S. SYSTEM FULLY OPERATIONAL.", "action": "reveal_home_preferences"})
+        self.mouth.speak("Good to see you, sir. Importing preferences from home interface.")
 
+        # Start background system monitor and audio listener
         self.monitor = SystemMonitor(alert_callback=self.handle_system_alert)
         threading.Thread(target=self.audio_listener_loop, daemon=True).start()
         
         logger.info("UI Cold Start complete. Agentic loop running.")
-        self.mouth.speak("Good to see you, sir. Importing preferences from home interface.")
         
         vision_triggers = ["look", "see", "what is this", "who is", "describe this"]
         
@@ -1013,7 +1008,7 @@ def main():
         security = subsystems.get("security")
 
         try:
-            worker = JarvisWorker(ears, brain, mouth, automation, security)
+            worker = JarvisWorker(ears, brain, mouth, automation, security, hud=hud)
             active_worker["worker"] = worker
             worker.status_signal.connect(hud.update_text)
             
