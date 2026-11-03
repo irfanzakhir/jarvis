@@ -31,8 +31,8 @@ class JarvisMouth:
                 pygame.mixer.init()
 
         self.voice = voice
-        # Configurable talkback rate: +15% default provides snappy, crisp, authentic Jarvis tempo
-        self.rate = rate or os.getenv("JARVIS_TTS_RATE", "+15%")
+        # Talkback rate reverted to original natural tempo (+0%) per user preference
+        self.rate = rate or os.getenv("JARVIS_TTS_RATE", "+0%")
         self._is_speaking = False
         self._stop_requested = threading.Event()
         self._is_paused = threading.Event()

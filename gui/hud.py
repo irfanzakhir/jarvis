@@ -521,7 +521,7 @@ class JarvisHUD(QMainWindow):
         self.events_label = QLabel("CALENDAR: SYNCHRONIZED\nSCHEDULE: NO CONFLICTS\nSTATUS: ACTIVE")
         self.events_label.setStyleSheet("color: #00d4ff; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5;")
         self.events_widget.content_layout.addWidget(self.events_label)
-        self.events_widget.move(screen.width() - 330, 600)
+        self.events_widget.move(screen.width() - 330, 480)
         self.events_widget.hide()
 
         # Native Atmospheric Weather Radar Widget (Dynamic Atmospheric Canvas)
@@ -548,7 +548,7 @@ class JarvisHUD(QMainWindow):
         self._map_intel_view = None  # Created lazily on first reveal/demand to prevent dual WebEngine cold boot
         self.map_label = QLabel()
         self.map_label.hide()
-        self.map_widget.move(screen.width() - 640, 705)
+        self.map_widget.move(screen.width() - 640, 45)
         self.map_widget.hide()
 
         # Native Acoustic Spectrum & Vocal Processing Core
@@ -569,7 +569,7 @@ class JarvisHUD(QMainWindow):
         self.hardware_widget = DraggableHUDWidget("HARDWARE HEALTH & THERMAL MATRIX", parent=self)
         self.hardware_widget.setFixedSize(360, 175)
         self._hardware_intel_view = None
-        self.hardware_widget.move(screen.width() - 640, 520)
+        self.hardware_widget.move(screen.width() - 640, 360)
         self.hardware_widget.hide()
 
         # Active center-focus & resting dock memory tracking
@@ -1152,11 +1152,19 @@ class JarvisHUD(QMainWindow):
         sw = screen.width()
         sh = screen.height()
 
-        # 1. Command Override Uplink (Bottom Center)
-        cmd_w = min(620, sw - 100)
+        # Bottom-Right Arc Sanctuary boundary (Width=300px, Height=300px)
+        # All widgets are strictly forbidden from overlapping this quadrant
+        s_w, s_h = 300, 300
+        s_left = sw - s_w
+        s_top = sh - s_h
+
+        # 1. Command Override Uplink (Bottom Center, bounded safely away from Bottom-Right Sanctuary)
         cmd_h = 95
+        max_cmd_w = min(600, (s_left - 40) * 2 - sw if (s_left - 40) * 2 > sw else s_left - 60)
+        cmd_w = max(300, min(600, max_cmd_w))
+        cmd_x = min((sw - cmd_w) // 2, s_left - cmd_w - 20)
         self.command_widget.setFixedSize(cmd_w, cmd_h)
-        self.command_widget.move((sw - cmd_w) // 2, sh - cmd_h - 25)
+        self.command_widget.move(cmd_x, sh - cmd_h - 25)
 
         # 2. System Telemetry (Top Left)
         telem_w = min(280, max(240, sw // 4))
@@ -1170,76 +1178,77 @@ class JarvisHUD(QMainWindow):
         self.admin_widget.setFixedSize(admin_w, admin_h)
         self.admin_widget.move(40, 40 + telem_h + 15)
 
-        # 4. Neural Activity Log (Bottom Left)
-        log_w = min(480, max(360, (sw - 140) // 2))
-        avail_h = (sh - cmd_h - 40) - (40 + telem_h + admin_h + 30)
-        log_h = max(180, min(240, avail_h))
+        # 4. Security Center Shield (Mid-Left Column below admin)
+        sec_w = min(280, max(240, sw // 4))
+        sec_h = 125
+        self.security_widget.setFixedSize(sec_w, sec_h)
+        self.security_widget.move(40, 40 + telem_h + admin_h + 25)
+
+        # 5. Neural Activity Log (Bottom Left)
+        log_w = min(480, max(320, s_left - 60))
+        avail_h = (sh - cmd_h - 40) - (40 + telem_h + admin_h + sec_h + 40)
+        log_h = max(160, min(240, avail_h))
         self.log_widget.setFixedSize(log_w, log_h)
         self.log_widget.move(40, sh - cmd_h - 35 - log_h)
 
-        # 5. Atmospheric Weather Radar (Top Right)
-        weather_w = min(400, max(320, sw // 3))
-        weather_h = min(270, max(230, (sh - cmd_h - 140) // 2))
+        # 6. Atmospheric Weather Radar (Top Right)
+        weather_w = min(380, max(300, sw // 3))
+        weather_h = min(250, max(190, (s_top - 60) // 2))
         self.weather_widget.setFixedSize(weather_w, weather_h)
         self.weather_widget.move(sw - weather_w - 40, 40)
 
-        # 6. Hardware Health & Thermal Matrix (Mid Right)
-        hw_w = min(360, max(280, weather_w))
-        hw_h = 165
+        # 7. Hardware Health & Thermal Matrix (Mid Right - strictly above Sanctuary)
+        hw_w = min(340, max(260, weather_w))
+        hw_h = 150
+        hw_y = min(40 + weather_h + 15, s_top - hw_h - 15)
         self.hardware_widget.setFixedSize(hw_w, hw_h)
-        self.hardware_widget.move(sw - hw_w - 40, 40 + weather_h + 15)
+        self.hardware_widget.move(sw - hw_w - 40, hw_y)
 
-        # 7. Security Center Shield (Bottom Right)
-        sec_w = min(320, max(260, weather_w))
-        sec_h = 130
-        self.security_widget.setFixedSize(sec_w, sec_h)
-        self.security_widget.move(sw - sec_w - 40, sh - cmd_h - 35 - sec_h)
-
-        # Base geometry for perimeter bays for remaining on-demand widgets
-        news_w = min(420, max(340, sw // 3))
-        news_h = min(330, max(260, sh // 2))
+        # Base geometry for perimeter bays for remaining on-demand widgets (All safely above Sanctuary)
+        news_w = min(400, max(320, sw // 3))
+        news_h = min(280, max(220, s_top - 60))
         self.news_widget.setFixedSize(news_w, news_h)
         self.news_widget.move(sw - news_w - 40, 40)
 
-        map_w = min(460, max(360, sw // 3))
-        map_h = min(340, max(260, sh // 2))
+        map_w = min(420, max(340, sw // 3))
+        map_h = min(280, max(220, s_top - 60))
         self.map_widget.setFixedSize(map_w, map_h)
         self.map_widget.move(sw - map_w - 40, 40)
 
-        audio_w = 360
-        audio_h = 165
+        audio_w = 340
+        audio_h = 150
         self.audio_widget.setFixedSize(audio_w, audio_h)
         self.audio_widget.move(sw - audio_w - 40, 40)
 
-        mem_w = 360
-        mem_h = 175
+        mem_w = 340
+        mem_h = 160
         self.memory_widget.setFixedSize(mem_w, mem_h)
-        self.memory_widget.move(sw - mem_w - 40, 220)
+        self.memory_widget.move(sw - mem_w - 40, min(200, s_top - mem_h - 20))
 
-        opt_w = 280
-        opt_h = 120
+        opt_w = 260
+        opt_h = 115
         self.optical_widget.setFixedSize(opt_w, opt_h)
-        self.optical_widget.move(40, 200)
+        self.optical_widget.move(40, 195)
 
-        net_w = 280
-        net_h = 150
+        net_w = 260
+        net_h = 140
         self.network_widget.setFixedSize(net_w, net_h)
-        self.network_widget.move(sw - net_w - 40, 50)
+        self.network_widget.move(sw - net_w - 40, 40)
 
-        diag_w = 280
-        diag_h = 120
+        diag_w = 260
+        diag_h = 115
         self.diagnostics_widget.setFixedSize(diag_w, diag_h)
-        self.diagnostics_widget.move(sw - diag_w - 40, 300)
+        self.diagnostics_widget.move(sw - diag_w - 40, min(200, s_top - diag_h - 15))
 
-        ag_w = 280
-        ag_h = 150
+        ag_w = 260
+        ag_h = 135
         self.antigravity_widget.setFixedSize(ag_w, ag_h)
-        self.antigravity_widget.move(sw - ag_w - 40, 440)
+        self.antigravity_widget.move(sw - ag_w - 40, min(330, s_top - ag_h - 15))
 
-        events_w = 280
-        events_h = 130
+        events_w = 260
+        events_h = 120
         self.events_widget.setFixedSize(events_w, events_h)
-        self.events_widget.move(sw - events_w - 40, 600)
+        self.events_widget.move(sw - events_w - 40, min(420, s_top - events_h - 15))
 
         # Record docking resting coordinates for all widgets
         for w in self.all_hud_widgets:

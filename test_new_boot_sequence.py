@@ -283,7 +283,7 @@ class TestNewBootSequencePipeline(unittest.TestCase):
         """
         from core.mouth import JarvisMouth
         mouth = JarvisMouth()
-        self.assertEqual(mouth.rate, "+15%")
+        self.assertEqual(mouth.rate, "+0%")
 
         # Test clause splitting on long sentence
         long_sentence = "Certainly sir, I am actively synchronizing telemetry with the regional satellite arrays now."
@@ -294,6 +294,24 @@ class TestNewBootSequencePipeline(unittest.TestCase):
         # Test cache hits for prewarmed system phrases
         self.assertIn("Good to see you, sir. Importing preferences from home interface.", mouth._audio_cache)
         self.assertIn("System locked. Awaiting biometric authentication.", mouth._audio_cache)
+
+    def test_11_bottom_right_sanctuary_no_widget_overlap(self):
+        """
+        Verifies that no HUD widget's resting position overlaps the Bottom-Right Arc Sanctuary:
+        - Bounding rectangle: X in [sw - 300, sw], Y in [sh - 300, sh]
+        - Asserts that all 16 widgets have zero geometric intersection with the Sanctuary.
+        """
+        from PyQt6.QtCore import QRect
+        screen = QApplication.primaryScreen().availableGeometry()
+        sw, sh = screen.width(), screen.height()
+        sanctuary = QRect(sw - 300, sh - 300, 300, 300)
+
+        for w in self.hud.all_hud_widgets:
+            w_rect = QRect(w.pos().x(), w.pos().y(), w.width(), w.height())
+            self.assertFalse(
+                sanctuary.intersects(w_rect),
+                f"Widget '{w.title_label.text()}' overlaps Bottom-Right Sanctuary! Widget rect: {w_rect}, Sanctuary: {sanctuary}"
+            )
 
 
 if __name__ == "__main__":
