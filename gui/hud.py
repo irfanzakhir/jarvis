@@ -1354,11 +1354,11 @@ class JarvisHUD(QMainWindow):
                 if eff and isinstance(eff, QGraphicsOpacityEffect):
                     eff.setOpacity(0.0)
 
-        # 4. Staggered reveal sequence with electronic chimes
+        # 4. Staggered reveal sequence with trimmed sci-fi click sounds
         stagger_plan = [
             (self.command_widget, 350, "cmd"),
-            (self.log_widget, 950, "log"),
-            (self.telemetry_widget, 1550, "telem")
+            (self.log_widget, 850, "log"),
+            (self.telemetry_widget, 1350, "telem")
         ]
 
         for widget, delay, chime_type in stagger_plan:
@@ -1368,7 +1368,7 @@ class JarvisHUD(QMainWindow):
         def _focus_input():
             if hasattr(self, 'cmd_input'):
                 self.cmd_input.setFocus()
-        QTimer.singleShot(1800, _focus_input)
+        QTimer.singleShot(1600, _focus_input)
 
     def _pop_in_preference_widget(self, widget, chime_type="cmd"):
         """Pops in a preference widget with high-tech chime and smooth ease-out opacity/motion."""

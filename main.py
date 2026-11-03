@@ -230,6 +230,13 @@ class _MouthProxy:
     def speak(self, text):
         self._worker.speak_async(text)
 
+    def speak_sync(self, text):
+        """Synchronously vocalizes speech directly through the real mouth, blocking until playback finishes."""
+        if self._real_mouth and hasattr(self._real_mouth, 'speak'):
+            self._real_mouth.speak(text)
+        else:
+            self._worker.speak_async(text)
+
     def stop(self):
         self._worker.clear_speech_queue()
 
@@ -448,9 +455,12 @@ class JarvisWorker(QThread):
             self.event_engine = EventEngine(self.command_queue, workspace_bridge=self.workspace)
             self.event_engine.start()
 
-        # Emit preference reveal action (docks Arc Reactor to side and reveals command, log, telemetry widgets with chimes)
+        # 1. Screen is currently the normal Jarvis Arc Reactor spinning on plain background (all widgets hidden)
+        welcome_phrase = "Good to see you, sir. Importing preferences from home interface."
+        self.mouth.speak_sync(welcome_phrase)
+
+        # 2. ONLY AFTER vocal greeting finishes: reveal widgets (docks Arc Reactor to side and reveals command, log, telemetry widgets with sci-fi clicks)
         self.status_signal.emit({"log": ">> J.A.R.V.I.S. SYSTEM FULLY OPERATIONAL.", "action": "reveal_home_preferences"})
-        self.mouth.speak("Good to see you, sir. Importing preferences from home interface.")
 
         # Start background system monitor and audio listener
         self.monitor = SystemMonitor(alert_callback=self.handle_system_alert)

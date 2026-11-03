@@ -9,6 +9,7 @@ import pygame
 import asyncio
 import edge_tts
 import io
+import os
 import threading
 import queue
 import re
@@ -25,6 +26,25 @@ class JarvisMouth:
         self._lock = threading.Lock()
         self._audio_cache = {}
         self._cache_lock = threading.Lock()
+
+        # Seed cache from pre-synthesized local assets if available
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        chimes_dir = os.path.join(base_dir, "assets", "chimes")
+        seed_files = {
+            "System locked. Awaiting biometric authentication.": "system_locked.mp3",
+            "Good to see you, sir. Importing preferences from home interface.": "greeting.mp3",
+            "Good to see you, sir.": "greeting_part1.mp3",
+            "Importing preferences from home interface.": "greeting_part2.mp3"
+        }
+        for phrase, fname in seed_files.items():
+            fpath = os.path.join(chimes_dir, fname)
+            if os.path.exists(fpath):
+                try:
+                    with open(fpath, "rb") as f:
+                        self._audio_cache[phrase] = f.read()
+                except Exception:
+                    pass
+
         # Pre-warm common system response phrases in background for instant (0ms) playback
         threading.Thread(target=self._prewarm_cache, daemon=True).start()
 
@@ -33,6 +53,8 @@ class JarvisMouth:
         common_phrases = [
             "System locked. Awaiting biometric authentication.",
             "Good to see you, sir. Importing preferences from home interface.",
+            "Good to see you, sir.",
+            "Importing preferences from home interface.",
             "Standing by. Optical sensors armed, sir.",
             "Standing by, sir.",
             "Scanning active display visual telemetry now, sir.",
@@ -55,8 +77,11 @@ class JarvisMouth:
             except Exception:
                 pass
 
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            executor.map(_prewarm_one, common_phrases)
+        try:
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                list(executor.map(_prewarm_one, common_phrases))
+        except (RuntimeError, Exception):
+            pass
 
     def is_speaking(self):
         """Returns True if Jarvis is currently talking."""
