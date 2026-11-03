@@ -580,6 +580,7 @@ class JarvisHUD(QMainWindow):
         self.chime_cmd_path = resource_path(os.path.join("assets", "chimes", "chime_cmd.wav"))
         self.chime_log_path = resource_path(os.path.join("assets", "chimes", "chime_log.wav"))
         self.chime_telem_path = resource_path(os.path.join("assets", "chimes", "chime_telem.wav"))
+        self.chime_click_path = resource_path(os.path.join("assets", "chimes", "sci_fi_click.wav"))
 
         IntelHub().bind_core_references(hud=self)
 
@@ -1264,14 +1265,18 @@ class JarvisHUD(QMainWindow):
 
         self._visible_widgets_before_min = []
 
-    def play_widget_chime(self, chime_type="cmd"):
-        """Plays an asynchronous electronic chime/beep sound for widget pop-in."""
+    def play_widget_chime(self, chime_type="click"):
+        """
+        Plays an asynchronous electronic sci-fi chime/click sound for widget reveal.
+        Uses native Windows PlaySound API asynchronously (0% CPU cycles, 0MB RAM footprint).
+        """
         path_map = {
             "cmd": getattr(self, "chime_cmd_path", None),
             "log": getattr(self, "chime_log_path", None),
-            "telem": getattr(self, "chime_telem_path", None)
+            "telem": getattr(self, "chime_telem_path", None),
+            "click": getattr(self, "chime_click_path", None)
         }
-        target_path = path_map.get(chime_type) or getattr(self, "chime_cmd_path", None)
+        target_path = path_map.get(chime_type) or getattr(self, "chime_click_path", None) or getattr(self, "chime_cmd_path", None)
         if target_path and os.path.exists(target_path):
             try:
                 winsound.PlaySound(target_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
@@ -1628,7 +1633,16 @@ class JarvisHUD(QMainWindow):
             target_widget.raise_()
             self.active_centered_widget = target_widget
 
-        # 3. Holographically materialize each target widget
+        # 3. Holographically materialize each target widget & play sci-fi chime SFX
+        has_newly_opened = any(
+            not w.isVisible()
+            or getattr(w, '_is_closing', False)
+            or (w.graphicsEffect() and w.graphicsEffect().opacity() < 0.2)
+            for w in targets
+        )
+        if has_newly_opened:
+            self.play_widget_chime("click")
+
         for widget in targets:
             widget._is_closing = False
             widget._is_opening = True

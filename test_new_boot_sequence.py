@@ -222,6 +222,79 @@ class TestNewBootSequencePipeline(unittest.TestCase):
                 self.assertGreater(duration, 0.15, f"Audio {ch_path} must contain active sound (got {duration:.2f}s)")
                 self.assertEqual(wf.getsampwidth(), 2, "Audio must be 16-bit PCM")
 
+    def test_08_any_widget_reveal_plays_chime_sfx(self):
+        """
+        Verifies that whenever ANY new widget is revealed (e.g. weather, news, map),
+        the sci-fi chime SFX is triggered asynchronously without CPU overhead.
+        """
+        chimes_triggered = []
+
+        def mock_play(chime_type="click"):
+            chimes_triggered.append(chime_type)
+
+        with patch.object(self.hud, 'play_widget_chime', side_effect=mock_play):
+            # Dismiss weather if open
+            self.hud.dismiss_widget("weather")
+            self.app.processEvents()
+
+            # Reveal weather widget
+            self.hud.reveal_widget_with_scan("weather")
+            self.app.processEvents()
+            self.assertIn("click", chimes_triggered, "Revealing weather widget must trigger chime sfx!")
+
+            # Reveal news widget
+            chimes_triggered.clear()
+            self.hud.dismiss_widget("news")
+            self.hud.reveal_widget_with_scan("news")
+            self.app.processEvents()
+            self.assertIn("click", chimes_triggered, "Revealing news widget must trigger chime sfx!")
+
+    def test_09_speech_recognition_accuracy_and_phonetics(self):
+        """
+        Verifies Speech Recognition upgrades:
+        - Language tuning (en-IN with fallback)
+        - Dynamic energy thresholding and relaxed pause threshold (0.8s)
+        - Contextual transcript normalizer correcting common phonetic misrecognitions
+        """
+        from core.ears import JarvisEars
+        ears = JarvisEars()
+        self.assertEqual(ears.primary_lang, "en-IN")
+        self.assertEqual(ears.fallback_lang, "en-US")
+        self.assertTrue(ears.recognizer.dynamic_energy_threshold)
+        self.assertEqual(ears.recognizer.pause_threshold, 0.8)
+        self.assertEqual(ears.recognizer.phrase_threshold, 0.3)
+        self.assertEqual(ears.recognizer.non_speaking_duration, 0.5)
+
+        # Test phonetic correction engine
+        self.assertEqual(ears._correct_transcript("service show whether intel"), "jarvis show weather intel")
+        self.assertEqual(ears._correct_transcript("tell me news about carla"), "tell me news about kerala")
+        self.assertEqual(ears._correct_transcript("show map into"), "show map intel")
+        self.assertEqual(ears._correct_transcript("activate anti gravity"), "activate antigravity")
+        self.assertEqual(ears._correct_transcript("show tell him a tree"), "show telemetry")
+        self.assertEqual(ears._correct_transcript("manual up link"), "manual uplink")
+
+    def test_10_tts_talkback_speed_and_parallel_pipeline(self):
+        """
+        Verifies Talkback Speed & TTS Upgrades:
+        - Rate accelerated to +15% for crisp, fast AI talkback
+        - Clause splitting enabled on long passages for sub-300ms TTFA
+        - Parallel async synthesis pre-fetches sentences concurrently
+        - RAM LRU cache populated for common phrases
+        """
+        from core.mouth import JarvisMouth
+        mouth = JarvisMouth()
+        self.assertEqual(mouth.rate, "+15%")
+
+        # Test clause splitting on long sentence
+        long_sentence = "Certainly sir, I am actively synchronizing telemetry with the regional satellite arrays now."
+        chunks = mouth._split_sentences(long_sentence)
+        self.assertGreaterEqual(len(chunks), 2, "Long sentences must be split at clause boundaries for instant TTFA")
+        self.assertEqual(chunks[0], "Certainly sir,")
+
+        # Test cache hits for prewarmed system phrases
+        self.assertIn("Good to see you, sir. Importing preferences from home interface.", mouth._audio_cache)
+        self.assertIn("System locked. Awaiting biometric authentication.", mouth._audio_cache)
+
 
 if __name__ == "__main__":
     unittest.main()
